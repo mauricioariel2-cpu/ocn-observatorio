@@ -1,0 +1,52 @@
+name: OCN scraper
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"   # cada 15 min (UTC). GitHub puede retrasarlo unos minutos.
+  workflow_dispatch: {}       # botón "Run workflow" para probar a mano
+
+concurrency:
+  group: ocn-recolector       # nunca dos corridas a la vez
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  recolectar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      OCN_CONTACTO: "OCN-Observatorio-Ciudadano/0.1 (+https://github.com/${{ github.repository }})"
+      OCN_PLAYWRIGHT: "1"
+      PLAYWRIGHT_BROWSERS_PATH: ~/.cache/ms-playwright
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      - name: Caché de Chromium (Playwright)
+        id: pw-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: pw-${{ runner.os }}-${{ hashFiles('requirements.txt') }}
+
+      - name: Instalar Chromium
+        run: |
+          if [ "${{ steps.pw-cache.outputs.cache-hit }}" = "true" ]; then
+            python -m playwright install-deps chromium
+          else
+            python -m playwright install --with-deps chromium
+          fi
+
+      - name: Recolectar y guardar en Supabase
+        run: python -m scraper.main

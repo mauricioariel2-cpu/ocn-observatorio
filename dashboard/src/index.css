@@ -1,0 +1,17 @@
+:root { --fondo:#0f1115; --panel:#171a21; --texto:#e8e8ea; --tenue:#9aa0aa; --rojo:#d7191c; --naranjo:#f28c28; --verde:#3fa34d; font-family: system-ui, sans-serif; color: var(--texto); background: var(--fondo); }
+* { box-sizing: border-box; }
+html, body, #root { margin: 0; height: 100%; }
+.app { display: grid; grid-template-columns: 340px 1fr; height: 100vh; }
+.mapa { height: 100%; width: 100%; }
+.panel { background: var(--panel); padding: 16px; overflow-y: auto; }
+.panel h1 { font-size: 1.15rem; margin: 0; }
+.panel h2 { font-size: .9rem; text-transform: uppercase; letter-spacing: .04em; color: var(--tenue); margin: 20px 0 8px; }
+.sub, .pie, .vacio { color: var(--tenue); font-size: .85rem; }
+.error { color: #ff8080; }
+.lista { list-style: none; margin: 0; padding: 0; }
+.lista li { display: flex; gap: 8px; align-items: baseline; padding: 6px 8px; border-left: 4px solid var(--verde); margin-bottom: 4px; background: #1e222b; }
+.lista li span { flex: 1; } .lista li em { font-size: .75rem; color: var(--tenue); font-style: normal; }
+.lista li.falla_masiva { border-color: var(--rojo); } .lista li.posibles_problemas { border-color: var(--naranjo); }
+.popup-lista { padding-left: 16px; margin: 6px 0; }
+.btn-afecta { background: var(--rojo); color: #fff; border: 0; padding: 6px 12px; border-radius: 4px; opacity: .6; }
+@media (max-width: 760px) { .app { grid-template-columns: 1fr; grid-template-rows: 45vh 55vh; } .panel { order: 2; } }
