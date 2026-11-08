@@ -21,7 +21,7 @@ jobs:
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
       OCN_CONTACTO: "OCN-Observatorio-Ciudadano/0.1 (+https://github.com/${{ github.repository }})"
       OCN_PLAYWRIGHT: "1"
-      PLAYWRIGHT_BROWSERS_PATH: ~/.cache/ms-playwright
+      PLAYWRIGHT_BROWSERS_PATH: /home/runner/.cache/ms-playwright  # ruta absoluta: "~" no se expande en env
     steps:
       - uses: actions/checkout@v4
 
@@ -37,7 +37,7 @@ jobs:
         id: pw-cache
         uses: actions/cache@v4
         with:
-          path: ~/.cache/ms-playwright
+          path: /home/runner/.cache/ms-playwright
           key: pw-${{ runner.os }}-${{ hashFiles('requirements.txt') }}
 
       - name: Instalar Chromium
