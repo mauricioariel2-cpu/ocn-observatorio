@@ -153,7 +153,7 @@ export default function Privacidad() {
           <li><b>Supabase Inc.</b> (Estados Unidos): base de datos donde se guardan los reportes.</li>
           <li><b>Netlify Inc.</b> (Estados Unidos): aloja esta página web.</li>
           <li><b>Esri</b> (Estados Unidos): dibuja el mapa base; tu navegador le pide las imágenes del mapa.</li>
-          <li><b>RIPE NCC</b> (Países Bajos): solo si aceptas que el asistente detecte tu compañía, tu navegador le consulta a qué red pertenece tu conexión. OCN no guarda tu IP.</li>
+          <li><b>RIPE NCC</b> (Países Bajos): al abrir el asistente, tu navegador le consulta a qué red pertenece tu conexión, para sugerirte tu compañía. OCN no recibe ni guarda tu IP.</li>
           <li><b>WhatsApp</b>, <b>SUBTEL</b> u otro canal: solo si tú decides compartir o enviar tu reclamo; OCN no envía nada a tu nombre.</li>
         </ul>
         <p>
@@ -204,7 +204,7 @@ export default function Privacidad() {
 
       <section>
         <h3>8. Cambios</h3>
-        <p>Si cambiamos esta política, actualizamos la versión y la fecha, y te pedimos aceptarla de nuevo antes de reportar.</p>
+        <p>Si cambiamos esta política, actualizamos la versión y la fecha aquí. Al enviar un reporte aceptas la versión vigente.</p>
       </section>
 
       <section className="pv-caja" id="pv-formulario" aria-labelledby="pv-form-titulo">
