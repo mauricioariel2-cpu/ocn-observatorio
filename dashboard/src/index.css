@@ -535,3 +535,23 @@ button.kpi-chip { font: inherit; font-size: 13px; cursor: pointer; }
 .leyenda-mundo i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
 .leyenda-mundo small { flex-basis: 100%; color: #a1a1aa; line-height: 1.35; }
 .leyenda-mundo a { color: #9fd3ff; }
+
+/* Selector de países y coincidencias internacionales */
+.selector-paises {
+  position: absolute; z-index: 940; top: calc(var(--barra-alto) + 12px); left: 50%; transform: translateX(-50%);
+  display: flex; gap: 6px; max-width: calc(100% - 24px); overflow-x: auto; scrollbar-width: none;
+  padding: 4px; border-radius: 999px; background: rgba(18,22,31,.9); border: 1px solid var(--borde); backdrop-filter: blur(8px);
+}
+.selector-paises::-webkit-scrollbar { display: none; }
+.selector-paises button { border: 0; background: transparent; color: var(--tenue); font: inherit; font-size: 13px; padding: 6px 12px; border-radius: 999px; cursor: pointer; white-space: nowrap; }
+.selector-paises button.activo { background: var(--rojo); color: #fff; font-weight: 600; }
+.aviso-internacional {
+  position: absolute; z-index: 930; top: calc(var(--barra-alto) + 60px); left: 12px; max-width: min(380px, calc(100% - 24px));
+  display: grid; gap: 8px;
+}
+.aviso-internacional p {
+  margin: 0; display: grid; gap: 3px; padding: 10px 12px; border-radius: 12px; font-size: 12.5px; color: var(--texto);
+  background: rgba(30,24,10,.92); border: 1px solid rgba(255,204,0,.45); box-shadow: 0 4px 14px rgba(0,0,0,.35);
+}
+.aviso-internacional span { color: #ffe08a; }
+.aviso-internacional small { color: var(--tenue); }

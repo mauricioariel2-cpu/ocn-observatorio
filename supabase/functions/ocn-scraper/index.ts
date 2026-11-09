@@ -1091,6 +1091,83 @@ export async function parsearPaisGB(html: string, cc: string, url: string, ahora
   return filas;
 }
 
+// Comentarios de usuarios en Geoblackout (vienen como datos dentro de la página): ciudad, hora, texto y
+// cuántos marcaron "mismo problema". La compañía sale de la sección del reporte o de su nombre en el texto.
+const OPERADORES_SA: Record<string, string[]> = {
+  AR: ["DIRECTV", "Claro", "Fibertel", "Flow", "Movistar", "Personal", "Telecentro", "Telecom", "Starlink"],
+  PE: ["DIRECTV", "Bitel", "Claro", "Entel", "Movistar", "WIN", "Starlink"],
+  BR: ["SKY", "Claro", "NET", "Nio", "Oi", "TIM", "Vivo", "Starlink"],
+};
+const VENTANA_SA_H = 12; // comentarios de las últimas 12 h (sirven para cruzar con otros países)
+export type ComentarioGB = { id: string; empresa: string; texto: string; creado: string; ciudad: string; mismo: number };
+
+export function comentariosGB(html: string, cc: string, ahora = new Date()): ComentarioGB[] {
+  const ops = OPERADORES_SA[cc] ?? [];
+  const h = html.replace(/\\"/g, '"');
+  const re = /"id":"(\w{8,})","reportKey":"([^"]+)"[^{}]*?"text":"((?:[^"\\]|\\.)*)","createdAt":"([^"]+)"[^{}]*?"city":(?:null|"((?:[^"\\]|\\.)*)")[^{}]*?"sameCount":(\d+)/g;
+  const vistos = new Set<string>();
+  const out: ComentarioGB[] = [];
+  for (const m of h.matchAll(re)) {
+    const [, id, clave, texto, creado, ciudad, mismo] = m;
+    if (vistos.has(id) || !ciudad) continue;
+    vistos.add(id);
+    const edadH = (ahora.getTime() - Date.parse(creado)) / 3600_000;
+    if (!(edadH >= 0 && edadH <= VENTANA_SA_H)) continue;
+    const slug = clave.split("_").slice(2).join(" ");
+    const enTexto = (o: string) => new RegExp(`\\b${o}\\b`, "i").test(texto) || (o === "DIRECTV" && /\bdgo\b|direct ?tv/i.test(texto));
+    const empresa = ops.find((o) => slug && o.toLowerCase() === slug.toLowerCase()) ?? ops.find(enTexto);
+    if (!empresa) continue;
+    out.push({ id, empresa, texto: texto.replace(/\\n/g, " ").slice(0, 300), creado, ciudad: ciudad.trim(), mismo: Number(mismo) });
+  }
+  return out;
+}
+
+// Coordenadas de una ciudad: primero las que ya guardamos antes; si no, OpenStreetMap (Nominatim),
+// respetando su política: 1 consulta por segundo, agente identificado y resultados guardados.
+const cacheCiudades = new Map<string, { lat: number; lon: number; region: string | null } | null>();
+async function ubicarCiudad(cc: string, ciudad: string, cupo: { n: number }) {
+  const k = `${cc}|${sinTildes(ciudad)}`;
+  if (cacheCiudades.has(k)) return cacheCiudades.get(k)!;
+  const [prev] = await rest(`reportes_caidas?select=latitud,longitud,region&pais=eq.${cc}&comuna=eq.${encodeURIComponent(ciudad)}&precision_geo=eq.comuna&latitud=not.is.null&limit=1`) as { latitud: number; longitud: number; region: string | null }[];
+  if (prev) { const v = { lat: prev.latitud, lon: prev.longitud, region: prev.region }; cacheCiudades.set(k, v); return v; }
+  if (cupo.n <= 0) return null; // se ubicará en una próxima corrida
+  cupo.n--;
+  await pausa(1100);
+  const q = new URLSearchParams({ q: ciudad, countrycodes: cc.toLowerCase(), format: "jsonv2", limit: "1", addressdetails: "1", "accept-language": "es" });
+  const r = await fetch(`https://nominatim.openstreetmap.org/search?${q}`, { headers: { "User-Agent": `${CONTACTO} (+https://ocn-chile.netlify.app)`, Accept: "application/json" } });
+  if (!r.ok) { await r.body?.cancel(); return null; }
+  const [g] = await r.json() as { lat: string; lon: string; address?: { state?: string } }[];
+  const v = g ? { lat: Number(g.lat), lon: Number(g.lon), region: g.address?.state ?? null } : null;
+  cacheCiudades.set(k, v);
+  return v;
+}
+
+export async function filasComentariosGB(coms: ComentarioGB[], cc: string, url: string, ubicar: (ciudad: string) => Promise<{ lat: number; lon: number; region: string | null } | null>, ahora = new Date()) {
+  const ventana = ventana15(ahora);
+  const grupos = new Map<string, ComentarioGB[]>();
+  for (const c of coms) {
+    const k = `${c.empresa}|${sinTildes(c.ciudad)}`;
+    grupos.set(k, [...(grupos.get(k) ?? []), c]);
+  }
+  const filas: Fila[] = [];
+  for (const lista of grupos.values()) {
+    const { empresa, ciudad } = lista[0];
+    const pos = await ubicar(ciudad);
+    if (!pos) continue;
+    const n = lista.reduce((s, c) => s + 1 + c.mismo, 0);
+    const masNuevo = lista.map((c) => c.creado).sort().at(-1)!;
+    const horas = Math.max(0, Math.round((ahora.getTime() - Date.parse(masNuevo)) / 3600_000));
+    const base = {
+      fuente: "geoblackout", pais: cc, empresa, servicio: "internet", comuna: ciudad, region: pos.region,
+      latitud: pos.lat, longitud: pos.lon, precision_geo: "comuna", cantidad_reportes: n, gravedad: gravedadVolumen(n, 2, 6),
+      gravedad_texto: `${lista.length} comentario(s) + ${n - lista.length} "mismo problema" en ${ciudad}; el más reciente hace ${horas} h`,
+      url_fuente: url, ventana, raw: { comentarios: lista.slice(0, 5).map((c) => ({ texto: c.texto, creado: c.creado, mismo: c.mismo })) },
+    };
+    filas.push({ ...base, hash_dedup: await hash(["geoblackout", cc, empresa, sinTildes(ciudad), ventana]) });
+  }
+  return filas;
+}
+
 async function filasGeoblackoutSA(): Promise<Fila[]> {
   const filas: Fila[] = [];
   const errores: string[] = [];
@@ -1102,6 +1179,8 @@ async function filasGeoblackoutSA(): Promise<Fila[]> {
       const html = await r.text();
       if (!r.ok || /cf-chl|challenge-platform/i.test(html.slice(0, 20000))) { errores.push(`${cc} ${r.status}`); continue; }
       filas.push(...await parsearPaisGB(html, cc, url));
+      const cupo = { n: 4 }; // ciudades nuevas a ubicar por país y corrida
+      filas.push(...await filasComentariosGB(comentariosGB(html, cc), cc, url, (ciudad) => ubicarCiudad(cc, ciudad, cupo)));
     } catch (e) { errores.push(`${cc} ${e instanceof Error ? e.message : e}`); }
   }
   if (!filas.length && errores.length) throw new Error(`Geoblackout SA: ${errores.join("; ")}`);

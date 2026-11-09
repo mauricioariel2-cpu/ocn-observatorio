@@ -229,3 +229,24 @@ export function contarSimilares(vecinos, filas, empresa, region) {
   for (const f of externas) if (f.cantidad_reportes > 0) porFuente[f.fuente] = (porFuente[f.fuente] ?? 0) + f.cantidad_reportes
   return { enOcn, otras, porFuente }
 }
+
+// ---------- Coincidencias internacionales ----------
+// Una misma compañía con reportes de personas (no mediciones de red) en 2 o más países a la vez.
+const FUENTES_PERSONAS = new Set(['geoblackout', 'fallacl', 'ocn', 'bluesky'])
+export function coincidencias(filas) {
+  const porEmpresa = new Map()
+  for (const f of ultimos(filas)) {
+    if (!FUENTES_PERSONAS.has(f.fuente) || f.empresa === 'Red completa' || f.gravedad === 'normal' || !f.gravedad) continue
+    const k = claveEmpresa(f.empresa)
+    if (!k || k === 'otro') continue
+    const e = porEmpresa.get(k) ?? { empresa: f.empresa.split(/[\s(]+/)[0], paises: new Map() }
+    const p = e.paises.get(paisDe(f)) ?? { reportes: 0, lugares: new Set(), fuentes: new Set() }
+    p.reportes += f.cantidad_reportes ?? 0
+    if (f.comuna || f.region) p.lugares.add(f.comuna ?? f.region)
+    p.fuentes.add(f.fuente)
+    e.paises.set(paisDe(f), p)
+    porEmpresa.set(k, e)
+  }
+  return [...porEmpresa.values()].filter((e) => e.paises.size >= 2)
+    .sort((a, b) => b.paises.size - a.paises.size)
+}

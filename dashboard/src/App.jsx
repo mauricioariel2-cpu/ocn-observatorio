@@ -6,8 +6,8 @@ import ChatOCN from './components/ChatOCN'
 import Estadisticas from './components/Estadisticas'
 import CortesLuz from './components/CortesLuz'
 import { cargarCortesLuz } from './lib/luz'
-import { REGIONES_CL } from './lib/geo'
-import { cargarReportes, cargarVecinos, contarSimilares, escucharNuevos, estadoNacional, mezclar, puntosComuna, puntosPais, resumirVecinos, semaforoRegiones, triangular } from './lib/datos'
+import { PAISES, REGIONES_CL, VISTAS_PAIS } from './lib/geo'
+import { cargarReportes, cargarVecinos, coincidencias, contarSimilares, escucharNuevos, estadoNacional, mezclar, puntosComuna, puntosPais, resumirVecinos, semaforoRegiones, triangular } from './lib/datos'
 
 const CENTROS = Object.fromEntries(REGIONES_CL.map(([n, la, lo]) => [n, [la, lo]]))
 
@@ -91,7 +91,8 @@ export default function App() {
   const enAmarillo = semaforo.filter((r) => r.gravedad === 'posibles_problemas').length
   const reportesChile = paises.find((p) => p.pais === 'CL')?.total ?? 0
   const ir = (v) => { setVista(v); if (v !== 'chile' && v !== 'mundo') setPanelAbierto(false) }
-  const enMapa = vista === 'chile' || vista === 'mundo'
+  const enMapa = vista === 'chile' || vista === 'mundo' || VISTAS_PAIS.some(([v]) => v === vista)
+  const internacional = useMemo(() => coincidencias(todas), [todas])
 
   const NAV = [['chile', 'Chile', 'mapa'], ['mundo', 'Mundo', 'mundo'], ['tendencias', 'Tendencias', 'tendencias'], ['luz', 'Luz', 'luz']]
 
@@ -110,7 +111,7 @@ export default function App() {
         </div>
         <nav className="vistas" aria-label="Secciones">
           {NAV.map(([v, t]) => (
-            <button key={v} className={vista === v ? 'activo' : ''} onClick={() => ir(v)}>{t}</button>
+            <button key={v} className={vista === v || (v === 'mundo' && ['ar', 'pe', 'br'].includes(vista)) ? 'activo' : ''} onClick={() => ir(v)}>{t}</button>
           ))}
         </nav>
         <span className={`vivo ${enVivo ? 'on' : ''}`} title={enVivo ? 'Conectado en vivo' : 'Actualizando cada minuto'}>
@@ -131,6 +132,25 @@ export default function App() {
               ⚡ <b>{luz.total.toLocaleString('es-CL')}</b> sin luz
             </button>
           )}
+        </div>
+      )}
+
+      {enMapa && vista !== 'chile' && (
+        <div className="selector-paises" role="tablist" aria-label="Elegir país">
+          {[...VISTAS_PAIS, ['mundo', 'Mundo']].map(([v, t]) => (
+            <button key={v} role="tab" aria-selected={vista === v} className={vista === v ? 'activo' : ''} onClick={() => ir(v)}>{t}</button>
+          ))}
+        </div>
+      )}
+      {enMapa && internacional.length > 0 && (
+        <div className="aviso-internacional" role="status">
+          {internacional.slice(0, 2).map((e) => (
+            <p key={e.empresa}>
+              <b>🌎 {e.empresa}: reportes en {e.paises.size} países a la vez</b>
+              <span>{[...e.paises].map(([cc, p]) => `${PAISES[cc]?.nombre ?? cc} ${p.reportes}${p.lugares.size ? ` (${[...p.lugares].slice(0, 3).join(', ')})` : ''}`).join(' · ')}</span>
+              <small>Posible falla internacional, sin confirmar: coincidencia de reportes de personas en distintos países.</small>
+            </p>
+          ))}
         </div>
       )}
 
@@ -168,7 +188,7 @@ export default function App() {
 
       <nav className="tabbar" aria-label="Secciones">
         {NAV.slice(0, 2).map(([v, t, ic]) => (
-          <button key={v} className={vista === v ? 'activo' : ''} onClick={() => ir(v)}><Icono n={ic} />{t}</button>
+          <button key={v} className={vista === v || (v === 'mundo' && ['ar', 'pe', 'br'].includes(vista)) ? 'activo' : ''} onClick={() => ir(v)}><Icono n={ic} />{t}</button>
         ))}
         <button className="tab-reportar" onClick={() => setChatAbierto(true)}><span aria-hidden><Icono n="mas" /></span>Reportar</button>
         {NAV.slice(2).map(([v, t, ic]) => (

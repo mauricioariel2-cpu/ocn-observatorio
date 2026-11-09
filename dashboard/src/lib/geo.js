@@ -4,7 +4,14 @@
 export const VISTAS = {
   chile: { nombre: 'Chile', bounds: [[-56.0, -76.0], [-17.4, -66.4]] },
   mundo: { nombre: 'Mundo', centro: [20, 0], zoom: 2 },
+  ar: { nombre: 'Argentina', pais: 'AR', bounds: [[-55.1, -73.6], [-21.8, -53.6]] },
+  pe: { nombre: 'Perú', pais: 'PE', bounds: [[-18.4, -81.4], [-0.03, -68.7]] },
+  br: { nombre: 'Brasil', pais: 'BR', bounds: [[-33.8, -74.0], [5.3, -34.8]] },
 }
+
+// Vistas por país (el selector del mapa). 'chile' también es una vista de país.
+export const VISTAS_PAIS = [['chile', 'Chile', 'CL'], ['ar', 'Argentina', 'AR'], ['pe', 'Perú', 'PE'], ['br', 'Brasil', 'BR']]
+export const paisDeVista = (v) => (v === 'chile' ? 'CL' : VISTAS[v]?.pais ?? null)
 
 // Niveles de detalle según el zoom: país (mundo) → región → comuna.
 export const ZOOM_REGION = 3

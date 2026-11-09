@@ -3,7 +3,7 @@ import L from 'leaflet'
 import { CircleMarker, GeoJSON, MapContainer, Marker, Popup, TileLayer, Tooltip, ZoomControl, useMap, useMapEvents } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import { FUENTES_TOTALES, puntosRegion, verifDe } from '../lib/datos'
-import { REGIONES_CL, VISTAS, nivelPorZoom } from '../lib/geo'
+import { REGIONES_CL, VISTAS, nivelPorZoom, paisDeVista } from '../lib/geo'
 import { COLOR_ESTADO, TEXTO_ESTADO, cargarContornos, cargarEstadoPaises, nombrePais } from '../lib/mundo'
 
 const SERVICIO = { internet_fijo: 'Internet hogar', internet_movil: 'Internet móvil', tv: 'TV', internet: 'Internet', telefonia_fija: 'Telefonía', streaming: 'Streaming', banca: 'Banca' }
@@ -92,8 +92,9 @@ export default function MapaCaidas({ comunas, paises, vista, nuevos, tri, meAfec
   const nivel = nivelPorZoom(zoom)
   const puntos = useMemo(() => {
     if (nivel === 'pais') return paises
-    // En la vista Chile solo se muestra Chile, para no confundir con países vecinos.
-    const enVista = (p) => vista !== 'chile' || p.pais === 'CL'
+    // En la vista de un país solo se muestra ese país, para no confundir con los vecinos.
+    const cc = paisDeVista(vista)
+    const enVista = (p) => !cc || p.pais === cc
     const lugares = comunas.filter(enVista)
     const conDetalle = new Set(lugares.map((c) => c.pais))
     const sinDetalle = paises.filter((p) => enVista(p) && !conDetalle.has(p.pais)) // país con solo total nacional
@@ -121,7 +122,7 @@ export default function MapaCaidas({ comunas, paises, vista, nuevos, tri, meAfec
         ⚡ Cortes de luz <b>{luz.length}</b>
       </button>
     )}
-    {vista === 'mundo' && (
+    {vista !== 'chile' && (
       <div className="leyenda-mundo" role="note">
         <span><i style={{ background: COLOR_ESTADO.normal }} />Normal</span>
         <span><i style={{ background: COLOR_ESTADO.posibles_problemas }} />Problemas</span>
@@ -132,7 +133,7 @@ export default function MapaCaidas({ comunas, paises, vista, nuevos, tri, meAfec
     )}
     {puntos.length === 0 && vista !== 'mundo' && (
       <div className="sin-caidas" role="status">
-        <b>Sin caídas activas {vista === 'chile' ? 'en Chile' : 'en el mundo'}</b>
+        <b>Sin caídas activas en {VISTAS[vista]?.nombre ?? 'el mundo'}</b>
         <span>Los círculos rojos aparecen apenas haya reportes masivos.</span>
       </div>
     )}
@@ -158,7 +159,7 @@ export default function MapaCaidas({ comunas, paises, vista, nuevos, tri, meAfec
       <ZoomControl position="bottomright" />
       <Camara vista={vista} />
       <SeguirZoom alCambiar={setZoom} />
-      {vista === 'mundo' && <CapaMundo />}
+      {vista !== 'chile' && <CapaMundo />}
       {tranquilas.map(([nombre, lat, lon]) => (
         <CircleMarker key={nombre} center={[lat, lon]} radius={6} className="region-ok"
           pathOptions={{ color: '#34c759', fillColor: '#34c759', fillOpacity: 0.55, weight: 1.5 }}>
