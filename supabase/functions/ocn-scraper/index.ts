@@ -883,11 +883,22 @@ async function secPost<T>(ruta: string, cuerpo: unknown): Promise<T> {
 
 // Guarda la última hora publicada por la SEC (si ya estaba, la base la ignora).
 async function guardarSec(): Promise<string | number> {
-  const serie = await secPost<HoraSec[]>("Get", {});
-  const ult = serie.at(-1);
-  if (!ult) throw new Error("SEC sin datos");
-  await pausa(500);
-  const filas = parsearSec(ult, await secPost<ComunaSec[]>("GetPorFecha", { anho: ult.anho, mes: ult.mes, dia: ult.dia, hora: ult.hora }));
+  // La SEC solo responde desde Chile: si existe SEC_RELAY_URL (función en Google Cloud Santiago), se usa ese relevo.
+  const relevo = Deno.env.get("SEC_RELAY_URL");
+  let ult: HoraSec | undefined, comunas: ComunaSec[];
+  if (relevo) {
+    const r = await fetch(relevo, { signal: AbortSignal.timeout(25_000) });
+    if (!r.ok) throw new Error(`relevo SEC HTTP ${r.status}`);
+    ({ ultima: ult, comunas } = await r.json() as { ultima?: HoraSec; comunas: ComunaSec[] });
+    if (!ult) throw new Error("SEC sin datos");
+  } else {
+    const serie = await secPost<HoraSec[]>("Get", {});
+    ult = serie.at(-1);
+    if (!ult) throw new Error("SEC sin datos");
+    await pausa(500);
+    comunas = await secPost<ComunaSec[]>("GetPorFecha", { anho: ult.anho, mes: ult.mes, dia: ult.dia, hora: ult.hora });
+  }
+  const filas = parsearSec(ult, comunas);
   if (!filas.length) return 0;
   const nuevas = await rest("cortes_luz?on_conflict=hora_sec,comuna", {
     method: "POST", headers: { Prefer: "resolution=ignore-duplicates,return=representation" }, body: JSON.stringify(filas),
