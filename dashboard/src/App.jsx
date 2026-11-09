@@ -3,6 +3,7 @@ import MapaCaidas from './components/MapaCaidas'
 import PanelNacional from './components/PanelNacional'
 import ReportarFalla from './components/ReportarFalla'
 import ChatOCN from './components/ChatOCN'
+import Estadisticas from './components/Estadisticas'
 import { REGIONES_CL } from './lib/geo'
 import { cargarReportes, cargarVecinos, contarSimilares, escucharNuevos, estadoNacional, mezclar, puntosComuna, puntosPais, resumirVecinos, triangular } from './lib/datos'
 
@@ -85,10 +86,8 @@ export default function App() {
           </div>
         </div>
         <nav className="vistas" aria-label="Cambiar vista del mapa">
-          {['chile', 'mundo'].map((v) => (
-            <button key={v} className={vista === v ? 'activo' : ''} onClick={() => setVista(v)}>
-              {v === 'chile' ? 'Chile' : 'Mundo'}
-            </button>
+          {[['chile', 'Chile'], ['mundo', 'Mundo'], ['tendencias', 'Tendencias']].map(([v, t]) => (
+            <button key={v} className={vista === v ? 'activo' : ''} onClick={() => setVista(v)}>{t}</button>
           ))}
         </nav>
         <span className={`vivo ${enVivo ? 'on' : ''}`} title={enVivo ? 'Conectado en vivo' : 'Actualizando cada minuto'}>
@@ -96,6 +95,9 @@ export default function App() {
         </span>
       </header>
 
+      {vista === 'tendencias' ? (
+        <main className="contenido scroll"><Estadisticas nacional={nacional} vecinos={vecinos} /></main>
+      ) : (
       <main className="contenido">
         <MapaCaidas comunas={comunas} paises={paises} vista={vista} nuevos={nuevos} tri={tri}
           meAfecta={(region) => setReporte({ abierto: true, region: region ?? '' })} />
@@ -111,6 +113,7 @@ export default function App() {
         />
         <ChatOCN contar={contar} />
       </main>
+      )}
       <ReportarFalla abierto={reporte.abierto} regionInicial={reporte.region}
         contar={contar}
         cerrar={() => { setReporte({ abierto: false, region: '' }); setVersionPerfil((n) => n + 1) }} />
