@@ -1,7 +1,10 @@
 // OCN · Recolector como Supabase Edge Function (reemplaza a GitHub Actions).
 //
 // Lo llama pg_cron cada 15 minutos (ver sql/003_cron_scraper.sql).
-// Lee Geoblackout Chile (robots.txt: Allow /, Crawl-delay 1): UNA petición por corrida.
+// Fuentes (cada una con UNA o dos peticiones por corrida):
+//  · Geoblackout Chile (robots.txt: Allow /, Crawl-delay 1): reportes por comuna.
+//  · FallaCL (robots.txt: Allow /): API JSON pública que usa su propia web,
+//    /api/reports/live, con reportes por servicio y la región del último reporte.
 // Downdetector no se incluye: su robots.txt prohíbe la página de DIRECTV.
 //
 // Variables que Supabase ya pone solas en toda función: SUPABASE_URL y
@@ -9,6 +12,7 @@
 // Edge Functions → Secrets, reemplaza al token por defecto de abajo.
 
 const FUENTE_URL = "https://geoblackout.com/cl/report/internet";
+const FALLACL_URL = "https://fallacl.cl";
 const VENTANA_HORAS = 3;
 const MIN_ENTRE_CORRIDAS_MIN = 10; // freno anti-abuso: no scrapea más seguido que esto
 
@@ -56,6 +60,27 @@ const COMUNAS: Record<string, [string, string, number, number]> = {
   "puerto montt": ["Puerto Montt", "Los Lagos", -41.4689, -72.9411],
   "iquique": ["Iquique", "Tarapacá", -20.2133, -70.1503],
   "arica": ["Arica", "Arica y Parinacota", -18.4783, -70.3126],
+};
+// Centro aproximado (capital regional) de cada región, para datos con precisión de región.
+const REGIONES: Record<string, [string, number, number]> = {
+  "arica y parinacota": ["Arica y Parinacota", -18.4783, -70.3126],
+  "tarapaca": ["Tarapacá", -20.2133, -70.1503],
+  "antofagasta": ["Antofagasta", -23.6509, -70.3975],
+  "atacama": ["Atacama", -27.3668, -70.3314],
+  "coquimbo": ["Coquimbo", -29.9027, -71.2519],
+  "valparaiso": ["Valparaíso", -33.0472, -71.6127],
+  "metropolitana": ["Metropolitana", -33.4489, -70.6693],
+  "o'higgins": ["O'Higgins", -34.1708, -70.7444],
+  "ohiggins": ["O'Higgins", -34.1708, -70.7444],
+  "maule": ["Maule", -35.4264, -71.6554],
+  "nuble": ["Ñuble", -36.6066, -72.1034],
+  "biobio": ["Biobío", -36.8270, -73.0503],
+  "araucania": ["Araucanía", -38.7359, -72.5904],
+  "la araucania": ["Araucanía", -38.7359, -72.5904],
+  "los rios": ["Los Ríos", -39.8142, -73.2459],
+  "los lagos": ["Los Lagos", -41.4689, -72.9411],
+  "aysen": ["Aysén", -45.5712, -72.0685],
+  "magallanes": ["Magallanes", -53.1638, -70.9171],
 };
 const CENTRO_PAIS: [number, number] = [-33.4489, -70.6693];
 
@@ -178,6 +203,43 @@ export async function parsear(html: string, url = FUENTE_URL, ahora = new Date()
   return filas.filter((f) => (f.cantidad_reportes as number) > 0 || f.gravedad !== "normal");
 }
 
+// ---------- FallaCL ----------
+// Mismos umbrales que muestra su web: >=5 "Falla masiva", >=2 "Posibles problemas".
+const SERVICIO_FALLACL: Record<string, string> = { isp: "internet", streaming: "streaming", bancos: "banca" };
+
+export function catalogoFallacl(html: string): Map<string, { nombre: string; cat: string }> {
+  const m = new Map<string, { nombre: string; cat: string }>();
+  for (const x of html.matchAll(/\{id:"([a-z0-9]+)",name:"([^"]+)",cat:"([^"]+)"/g)) m.set(x[1], { nombre: x[2], cat: x[3] });
+  return m;
+}
+
+export async function parsearFallacl(
+  live: { data?: Record<string, { count?: number; last_region?: string; last_ciudad?: string; last_at?: string }> },
+  catalogo = new Map<string, { nombre: string; cat: string }>(),
+  ahora = new Date(),
+): Promise<Fila[]> {
+  const ventana = ventana15(ahora);
+  const filas: Fila[] = [];
+  for (const [id, d] of Object.entries(live?.data ?? {})) {
+    const n = Number(d?.count ?? 0);
+    if (!(n > 0)) continue;
+    const info = catalogo.get(id);
+    const reg = d.last_region ? REGIONES[sinTildes(d.last_region).replace(/^region (de |del )?/, "")] : undefined;
+    const base = {
+      fuente: "fallacl", pais: "CL", empresa: info?.nombre ?? id,
+      servicio: SERVICIO_FALLACL[info?.cat ?? ""] ?? info?.cat ?? "otro",
+      comuna: d.last_ciudad || null, region: reg ? reg[0] : (d.last_region || null),
+      latitud: reg ? reg[1] : CENTRO_PAIS[0], longitud: reg ? reg[2] : CENTRO_PAIS[1],
+      precision_geo: reg ? "region" : "pais",
+      cantidad_reportes: n, gravedad: gravedadVolumen(n, 2, 5),
+      gravedad_texto: reg ? `${n} reporte(s); el último desde ${reg[0]}` : `${n} reporte(s)`,
+      url_fuente: `${FALLACL_URL}/${id}`, ventana, raw: { id, ...d },
+    };
+    filas.push({ ...base, hash_dedup: await hash([base.fuente, "CL", id, ventana]) });
+  }
+  return filas;
+}
+
 async function rest(path: string, init: RequestInit = {}) {
   const url = Deno.env.get("SUPABASE_URL")!;
   const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -189,34 +251,64 @@ async function rest(path: string, init: RequestInit = {}) {
   return r.status === 204 ? [] : r.json();
 }
 
+function cabeceras(accept: string) {
+  return {
+    "User-Agent": `${USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)]} ${CONTACTO}`,
+    "Accept-Language": "es-CL,es;q=0.9",
+    Accept: accept,
+  };
+}
+
+async function filasGeoblackout(): Promise<Fila[]> {
+  const r = await fetch(FUENTE_URL, { headers: cabeceras("text/html") });
+  const html = await r.text();
+  if (!r.ok || /cf-chl|challenge-platform/i.test(html.slice(0, 20000))) {
+    throw new Error(`Geoblackout respondió ${r.status} o con desafío anti-bot; se omite`);
+  }
+  return parsear(html);
+}
+
+async function filasFallacl(): Promise<Fila[]> {
+  const r = await fetch(`${FALLACL_URL}/api/reports/live`, { headers: cabeceras("application/json") });
+  if (!r.ok) throw new Error(`FallaCL respondió ${r.status}`);
+  const live = await r.json();
+  let catalogo = new Map<string, { nombre: string; cat: string }>();
+  try {
+    const h = await fetch(FALLACL_URL, { headers: cabeceras("text/html") });
+    if (h.ok) catalogo = catalogoFallacl(await h.text());
+  } catch { /* sin nombres bonitos: se usa el id */ }
+  return parsearFallacl(live, catalogo);
+}
+
 async function corrida(): Promise<Record<string, unknown>> {
-  // Freno: si hubo una captura hace menos de 10 min, no volvemos a pedir la página.
+  // Freno: si hubo una captura hace menos de 10 min, no volvemos a pedir las páginas.
   const ult = await rest("reportes_caidas?select=capturado_en&order=capturado_en.desc&limit=1");
   if (ult[0] && Date.now() - Date.parse(ult[0].capturado_en) < MIN_ENTRE_CORRIDAS_MIN * 60_000) {
     return { omitido: "corrida reciente", ultima: ult[0].capturado_en };
   }
-  const r = await fetch(FUENTE_URL, {
-    headers: {
-      "User-Agent": `${USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)]} ${CONTACTO}`,
-      "Accept-Language": "es-CL,es;q=0.9",
-      Accept: "text/html",
-    },
-  });
-  const html = await r.text();
-  if (!r.ok || /cf-chl|challenge-platform/i.test(html.slice(0, 20000))) {
-    return { error: `Geoblackout respondió ${r.status} o con desafío anti-bot; se omite` };
+  const res: Record<string, unknown> = {};
+  const filas: Fila[] = [];
+  // Cada fuente va por separado: si una falla, la otra igual se guarda.
+  for (const [nombre, fn] of [["geoblackout", filasGeoblackout], ["fallacl", filasFallacl]] as const) {
+    try {
+      const f = await fn();
+      filas.push(...f);
+      res[nombre] = f.length;
+    } catch (e) {
+      res[nombre] = `error: ${e instanceof Error ? e.message : e}`;
+    }
   }
-  const filas = await parsear(html);
-  if (!filas.length) return { insertadas: 0, nota: "sin datos; ¿cambió el HTML?" };
+  if (!filas.length) return { ...res, insertadas: 0, nota: "sin datos nuevos" };
   const nuevas = await rest("reportes_caidas?on_conflict=hash_dedup", {
     method: "POST",
     headers: { Prefer: "resolution=ignore-duplicates,return=representation" },
     body: JSON.stringify(filas),
   });
   return {
+    ...res,
     enviadas: filas.length,
     insertadas: nuevas.length,
-    con_comuna: filas.filter((f) => f.precision_geo === "comuna").length,
+    con_ubicacion: filas.filter((f) => f.precision_geo === "comuna" || f.precision_geo === "region").length,
   };
 }
 

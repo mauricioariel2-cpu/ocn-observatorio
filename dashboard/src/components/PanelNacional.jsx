@@ -15,7 +15,7 @@ export default function PanelNacional({ comunas, paises, nacional, actualizado, 
 
         <h2>Zonas afectadas en Chile</h2>
         {comunas.filter((c) => c.pais === 'CL').length === 0 && (
-          <p className="vacio">Aún no hay reportes con comuna. Se pintarán apenas lleguen.</p>
+          <p className="vacio">Aún no hay reportes con ubicación. Se pintarán apenas lleguen.</p>
         )}
         <ul className="lista">
           {comunas.filter((c) => c.pais === 'CL').slice(0, 12).map((c) => (

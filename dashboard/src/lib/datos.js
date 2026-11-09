@@ -50,14 +50,15 @@ function ultimos(filas) {
   return [...vistos.values()]
 }
 
-// Círculos por comuna (zoom cercano). Solo datos con ubicación real.
+// Círculos por lugar (zoom cercano): comunas (Geoblackout) y regiones (FallaCL).
+const CON_LUGAR = new Set(['comuna', 'region'])
 export function puntosComuna(filas) {
   const porLugar = new Map()
   for (const f of ultimos(filas)) {
-    if (f.precision_geo !== 'comuna' || f.latitud == null || f.longitud == null) continue
+    if (!CON_LUGAR.has(f.precision_geo) || f.latitud == null || f.longitud == null) continue
     const k = `${f.latitud},${f.longitud}`
     const p = porLugar.get(k) ?? {
-      id: k, lat: f.latitud, lon: f.longitud, titulo: f.comuna, subtitulo: f.region,
+      id: k, lat: f.latitud, lon: f.longitud, titulo: f.comuna ?? f.region, subtitulo: f.region,
       pais: paisDe(f), total: 0, gravedad: 'normal', detalle: [],
     }
     p.total += f.cantidad_reportes ?? 0
@@ -99,7 +100,7 @@ export function puntosPais(filas) {
       pais: cod, totalNacional: 0, totalComunas: 0, gravedad: 'normal', detalle: [],
     }
     if (f.precision_geo === 'pais') p.totalNacional += f.cantidad_reportes ?? 0
-    if (f.precision_geo === 'comuna') p.totalComunas += f.cantidad_reportes ?? 0
+    if (CON_LUGAR.has(f.precision_geo)) p.totalComunas += f.cantidad_reportes ?? 0
     p.gravedad = peor(p.gravedad, f.gravedad)
     p.detalle.push(f)
     porPais.set(cod, p)
