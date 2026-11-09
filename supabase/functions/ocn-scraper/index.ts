@@ -10,6 +10,7 @@
 //    por operador (sistema autónomo), por región y del país completo.
 //  · RIPE Atlas (RIPE NCC, API pública /api/v2/probes): sondas físicas en Chile; si varias
 //    sondas de un mismo operador se desconectan en las últimas 3 h, es señal de corte.
+//  · Bluesky (API AT Protocol con cuenta propia): posts públicos de la última hora sobre fallas en Chile.
 //  · SEC (apps.sec.cl/INTONLINEv1): clientes sin luz por comuna, cada hora; van a la tabla cortes_luz.
 //  · Blackout Map (blackoutmap.net, robots: Allow /, Crawl-delay 1; datos CC BY-NC 4.0,
 //    citar "Blackout Map"): sus propios puntos de prueba DENTRO de la red de cada operador
@@ -764,6 +765,79 @@ export async function filasRegionesBM(status: { regions?: { cc: string; region: 
   return filas;
 }
 
+// ── Bluesky: posts públicos que hablan de caídas (necesita cuenta; secretos BSKY_HANDLE y BSKY_APP_PASSWORD) ──
+// La búsqueda pública sin sesión responde 403 desde 2025, así que se inicia sesión con una contraseña de app.
+// Solo se cuentan posts de la última hora que nombran a una empresa, una palabra de falla Y algo de Chile
+// (una comuna o la palabra Chile): Movistar o Claro también existen en otros países.
+const BSKY_PDS = "https://bsky.social/xrpc";
+const RE_FALLA = /\b(ca[ií]d[oa]s?|se cay[oó]|sin (internet|servicio|se[ñn]al|conexi[oó]n|luz|wifi)|no (funciona|anda|carga)|falla(ndo)?|corte)\b/i;
+const RE_CHILE = /\bchile\b|🇨🇱|\bstgo\b/i;
+type PostBsky = { uri: string; indexedAt: string; record?: { text?: string } };
+
+export function parsearBluesky(posts: Record<string, PostBsky[]>, ahora = new Date()) {
+  const resumen: { empresa: string; n: number; comunas: Map<string, number>; ejemplos: string[] }[] = [];
+  const hace1h = ahora.getTime() - 3600_000;
+  // Nombres de comuna que también son palabras comunes o lugares de otros países: no sirven para ubicar un post.
+  const AMBIGUAS = new Set(["victoria", "florida", "primavera", "independencia", "pinto", "santa cruz", "san pedro", "la union", "los lagos",
+    "maule", "el carmen", "rinconada", "placilla", "olivar", "retiro", "romeral", "porvenir", "natales", "nogales", "molina", "santa maria", "la estrella", "la cruz", "cabrero"]);
+  const comunasOrden = Object.keys(COMUNAS).filter((k) => k.length > 4 && !AMBIGUAS.has(k)).sort((a, b) => b.length - a.length);
+  for (const [empresa, lista] of Object.entries(posts)) {
+    const vistos = new Set<string>();
+    const r = { empresa, n: 0, comunas: new Map<string, number>(), ejemplos: [] as string[] };
+    for (const p of lista) {
+      const texto = p.record?.text ?? "";
+      if (vistos.has(p.uri) || Date.parse(p.indexedAt) < hace1h) continue;
+      vistos.add(p.uri);
+      const t = sinTildes(texto);
+      if (!t.includes(sinTildes(empresa)) || !RE_FALLA.test(texto)) continue;
+      const comuna = comunasOrden.find((k) => new RegExp(`\\b${k}\\b`).test(t));
+      if (!comuna && !RE_CHILE.test(texto)) continue;
+      r.n++;
+      if (comuna) r.comunas.set(comuna, (r.comunas.get(comuna) ?? 0) + 1);
+      if (r.ejemplos.length < 5) r.ejemplos.push(p.uri);
+    }
+    if (r.n) resumen.push(r);
+  }
+  return resumen;
+}
+
+async function filasBluesky(): Promise<Fila[]> {
+  const handle = Deno.env.get("BSKY_HANDLE"), clave = Deno.env.get("BSKY_APP_PASSWORD");
+  if (!handle || !clave) return []; // aún no configurado: no es un error
+  const s = await fetch(`${BSKY_PDS}/com.atproto.server.createSession`, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ identifier: handle, password: clave }),
+  });
+  if (!s.ok) throw new Error(`Bluesky sesión HTTP ${s.status}`);
+  const { accessJwt } = await s.json();
+  const desde = new Date(Date.now() - 3600_000).toISOString();
+  const posts: Record<string, PostBsky[]> = {};
+  for (const empresa of OPERADORES) {
+    const q = new URLSearchParams({ q: empresa, lang: "es", since: desde, sort: "latest", limit: "100" });
+    const r = await fetch(`${BSKY_PDS}/app.bsky.feed.searchPosts?${q}`, { headers: { Authorization: `Bearer ${accessJwt}`, Accept: "application/json" } });
+    if (!r.ok) throw new Error(`Bluesky búsqueda HTTP ${r.status}`);
+    posts[empresa] = (await r.json()).posts ?? [];
+    await pausa(300);
+  }
+  const ventana = ventana15(new Date());
+  const filas: Fila[] = [];
+  for (const e of parsearBluesky(posts)) {
+    const base = {
+      fuente: "bluesky", pais: "CL", empresa: e.empresa, servicio: "internet", comuna: null, region: null,
+      latitud: CENTRO_PAIS[0], longitud: CENTRO_PAIS[1], precision_geo: "pais", cantidad_reportes: e.n,
+      gravedad: gravedadVolumen(e.n, 2, 5), gravedad_texto: `${e.n} post(s) públicos en Bluesky sobre fallas de ${e.empresa} en Chile en la última hora`,
+      url_fuente: `https://bsky.app/search?q=${encodeURIComponent(e.empresa)}`, ventana, raw: { ejemplos: e.ejemplos },
+    };
+    filas.push({ ...base, hash_dedup: await hash(["bluesky", e.empresa, ventana]) });
+    for (const [k, n] of e.comunas) {
+      const c = COMUNAS[k];
+      const fc = { ...base, comuna: c[0], region: c[1], latitud: c[2], longitud: c[3], precision_geo: "comuna", cantidad_reportes: n,
+        gravedad: gravedadVolumen(n, 1, 3), gravedad_texto: `${n} post(s) en Bluesky sobre fallas de ${e.empresa} en ${c[0]} en la última hora` };
+      filas.push({ ...fc, hash_dedup: await hash(["bluesky", e.empresa, c[0], ventana]) });
+    }
+  }
+  return filas;
+}
+
 // ── SEC: clientes sin luz por comuna (Superintendencia de Electricidad y Combustibles) ──
 // apps.sec.cl/INTONLINEv1 (sin robots.txt; es la API que usa su propia página). Datos por hora, en hora de Chile,
 // cargados por las distribuidoras. Se guardan en la tabla cortes_luz (sql/009), no en reportes_caidas.
@@ -972,7 +1046,7 @@ async function corrida(): Promise<Record<string, unknown>> {
   const filas: Fila[] = [];
   // Cada fuente va por separado: si una falla, la otra igual se guarda.
   // Las fuentes se piden en paralelo (son sitios distintos) y cada una tiene su propio tiempo máximo.
-  const fuentes = [["geoblackout", filasGeoblackout], ["fallacl", filasFallacl], ["ioda", filasIoda], ["blackoutmap", filasBlackoutMap], ["atlas", filasAtlas]] as const;
+  const fuentes = [["geoblackout", filasGeoblackout], ["fallacl", filasFallacl], ["ioda", filasIoda], ["blackoutmap", filasBlackoutMap], ["atlas", filasAtlas], ["bluesky", filasBluesky]] as const;
   const [resultados, sec] = await Promise.all([
     Promise.allSettled(fuentes.map(([, fn]) => fn())),
     guardarSec().catch((e) => `error: ${e instanceof Error ? e.message : e}`),
