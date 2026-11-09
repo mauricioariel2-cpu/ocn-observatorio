@@ -117,3 +117,37 @@ export function estadoNacional(filas, pais = 'CL') {
     .filter((f) => f.precision_geo === 'pais' && paisDe(f) === pais)
     .sort((a, b) => (ORDEN[b.gravedad] ?? 0) - (ORDEN[a.gravedad] ?? 0) || (b.cantidad_reportes ?? 0) - (a.cantidad_reportes ?? 0))
 }
+
+// ---------- Triangulación ----------
+// Una falla de una empresa se considera CONFIRMADA solo si al menos dos fuentes
+// independientes la reportan (gravedad distinta de normal) en la misma ventana reciente.
+// Con una sola fuente se muestra como "sin confirmar". Nunca se inventan datos:
+// todo lo que se ve sale de filas reales de reportes_caidas, con su enlace de origen.
+export const MIN_FUENTES = 2
+const VENTANA_CRUCE_MIN = 60
+
+export function claveEmpresa(nombre) {
+  return String(nombre ?? '')
+    .normalize('NFKD').replace(/[̀-ͯ]/g, '')
+    .toLowerCase().trim().split(/[\s(]+/)[0] // "DIRECTV GO" y "DIRECTV" -> "directv"
+}
+
+export function triangular(filas, ahora = Date.now()) {
+  const limite = ahora - VENTANA_CRUCE_MIN * 60_000
+  const porEmpresa = new Map()
+  for (const f of filas) {
+    if (f.gravedad === 'normal' || !f.gravedad) continue
+    const t = Date.parse(f.capturado_en ?? f.ventana)
+    if (Number.isFinite(t) && t < limite) continue
+    const k = `${paisDe(f)}|${claveEmpresa(f.empresa)}`
+    const e = porEmpresa.get(k) ?? { empresa: f.empresa, pais: paisDe(f), fuentes: new Set() }
+    e.fuentes.add(f.fuente)
+    porEmpresa.set(k, e)
+  }
+  for (const e of porEmpresa.values()) e.confirmado = e.fuentes.size >= MIN_FUENTES
+  return porEmpresa
+}
+
+export function verifDe(tri, f) {
+  return tri.get(`${paisDe(f)}|${claveEmpresa(f.empresa)}`) ?? { fuentes: new Set(), confirmado: false }
+}

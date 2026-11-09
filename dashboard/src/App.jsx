@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import MapaCaidas from './components/MapaCaidas'
 import PanelNacional from './components/PanelNacional'
-import { cargarReportes, escucharNuevos, estadoNacional, mezclar, puntosComuna, puntosPais } from './lib/datos'
+import { cargarReportes, escucharNuevos, estadoNacional, mezclar, puntosComuna, puntosPais, triangular } from './lib/datos'
 
 const REFRESCO_MS = 60_000 // respaldo por si se corta el canal en vivo
 const DESTACAR_MS = 20_000 // cuánto parpadea un círculo con reportes nuevos
@@ -51,6 +51,7 @@ export default function App() {
   const comunas = useMemo(() => puntosComuna(filas), [filas])
   const paises = useMemo(() => puntosPais(filas), [filas])
   const nacional = useMemo(() => estadoNacional(filas, 'CL'), [filas])
+  const tri = useMemo(() => triangular(filas), [filas])
 
   return (
     <div className={`app ${panelAbierto ? 'panel-abierto' : ''}`}>
@@ -75,11 +76,12 @@ export default function App() {
       </header>
 
       <main className="contenido">
-        <MapaCaidas comunas={comunas} paises={paises} vista={vista} nuevos={nuevos} />
+        <MapaCaidas comunas={comunas} paises={paises} vista={vista} nuevos={nuevos} tri={tri} />
         <PanelNacional
           comunas={comunas}
           paises={paises}
           nacional={nacional}
+          tri={tri}
           actualizado={actualizado}
           error={error}
           abierto={panelAbierto}

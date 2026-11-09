@@ -2,18 +2,25 @@ import { useEffect, useMemo, useState } from 'react'
 import L from 'leaflet'
 import { MapContainer, Marker, Popup, TileLayer, ZoomControl, useMap, useMapEvents } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
-import { puntosRegion } from '../lib/datos'
+import { puntosRegion, verifDe } from '../lib/datos'
 import { VISTAS, nivelPorZoom } from '../lib/geo'
 
-const SERVICIO = { internet_fijo: 'Internet hogar', internet_movil: 'Internet móvil', tv: 'TV', internet: 'Internet', telefonia_fija: 'Telefonía' }
+const SERVICIO = { internet_fijo: 'Internet hogar', internet_movil: 'Internet móvil', tv: 'TV', internet: 'Internet', telefonia_fija: 'Telefonía', streaming: 'Streaming', banca: 'Banca' }
+const FUENTE = { geoblackout: 'Geoblackout', fallacl: 'FallaCL', downdetector: 'Downdetector' }
+
+function hace(iso) {
+  const min = Math.round((Date.now() - Date.parse(iso)) / 60000)
+  if (!Number.isFinite(min)) return ''
+  return min < 60 ? `hace ${min} min` : `hace ${Math.round(min / 60)} h`
+}
 
 function diametro(total) {
   return Math.round(Math.min(30 + Math.sqrt(total) * 7, 92))
 }
 
-function icono(p, nuevo) {
+function icono(p, nuevo, confirmado) {
   const d = diametro(p.total)
-  const clases = ['burbuja', p.gravedad, nuevo ? 'nuevo' : ''].join(' ')
+  const clases = ['burbuja', p.gravedad, nuevo ? 'nuevo' : '', confirmado ? 'confirmado' : 'sin-confirmar'].join(' ')
   return L.divIcon({
     className: 'burbuja-wrap',
     html: `<div class="${clases}" style="width:${d}px;height:${d}px;font-size:${Math.max(12, d / 3.2)}px"><span>${p.total}</span></div>`,
@@ -38,7 +45,7 @@ function SeguirZoom({ alCambiar }) {
   return null
 }
 
-export default function MapaCaidas({ comunas, paises, vista, nuevos }) {
+export default function MapaCaidas({ comunas, paises, vista, nuevos, tri }) {
   const [zoom, setZoom] = useState(4)
   const nivel = nivelPorZoom(zoom)
   const puntos = useMemo(() => {
@@ -51,8 +58,12 @@ export default function MapaCaidas({ comunas, paises, vista, nuevos }) {
     return [...(nivel === 'region' ? puntosRegion(lugares) : lugares), ...sinDetalle]
   }, [nivel, comunas, paises, vista])
   const iconos = useMemo(
-    () => Object.fromEntries(puntos.map((p) => [p.id, icono(p, p.detalle.some((f) => nuevos.has(f.id)))])),
-    [puntos, nuevos],
+    () => Object.fromEntries(puntos.map((p) => [p.id, icono(
+      p,
+      p.detalle.some((f) => nuevos.has(f.id)),
+      p.detalle.some((f) => f.gravedad !== 'normal' && verifDe(tri, f).confirmado),
+    )])),
+    [puntos, nuevos, tri],
   )
 
   return (
@@ -93,12 +104,26 @@ export default function MapaCaidas({ comunas, paises, vista, nuevos }) {
               {p.subtitulo && <span className="popup-sub">{p.subtitulo}</span>}
               <div className="popup-total">{p.total} reportes · últimas 3 h</div>
               <ul>
-                {p.detalle.map((e) => (
-                  <li key={e.id ?? e.hash_dedup}>
-                    <b>{e.empresa}</b> {e.comuna && nivel !== 'comuna' ? `· ${e.comuna} ` : ''}
-                    · {SERVICIO[e.servicio] ?? e.servicio ?? 's/i'}: {e.cantidad_reportes ?? '–'}
-                  </li>
-                ))}
+                {p.detalle.map((e) => {
+                  const v = verifDe(tri, e)
+                  return (
+                    <li key={e.id ?? e.hash_dedup}>
+                      <b>{e.empresa}</b> {e.comuna && nivel !== 'comuna' ? `· ${e.comuna} ` : ''}
+                      · {SERVICIO[e.servicio] ?? e.servicio ?? 's/i'}: {e.cantidad_reportes ?? '–'}
+                      <small className="origen">
+                        {e.gravedad !== 'normal' && (
+                          <span className={v.confirmado ? 'sello ok' : 'sello'}>
+                            {v.confirmado ? `✓ Confirmado por ${v.fuentes.size} fuentes` : 'Sin confirmar (1 fuente)'}
+                          </span>
+                        )}
+                        {' '}Fuente: {e.url_fuente
+                          ? <a href={e.url_fuente} target="_blank" rel="noreferrer">{FUENTE[e.fuente] ?? e.fuente}</a>
+                          : (FUENTE[e.fuente] ?? e.fuente)} · {hace(e.capturado_en ?? e.ventana)}
+                        {e.precision_geo === 'region' && ' · ubicación aproximada (región del último reporte)'}
+                      </small>
+                    </li>
+                  )
+                })}
               </ul>
               {nivel !== 'comuna' && <em className="popup-tip">Acércate para ver más detalle</em>}
               <button className="btn-afecta" disabled title="Llega con el motor de reclamos">Me afecta</button>

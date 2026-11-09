@@ -116,3 +116,12 @@ button { font: inherit; color: inherit; cursor: pointer; }
   .mapa .leaflet-bottom { bottom: 64px; }
   .panel { z-index: 1001; }
 }
+
+/* Verificación cruzada */
+.burbuja.sin-confirmar { border-style: dashed; opacity: .8; animation: none; }
+.popup .origen { display: block; color: var(--tenue); font-size: 11px; margin: 2px 0 4px; }
+.popup .origen a { color: #9ec5ff; }
+.sello { display: inline-block; padding: 1px 6px; border-radius: 6px; background: var(--panel-2); color: var(--naranjo); font-weight: 700; }
+.sello.ok { color: var(--verde); }
+.lista li.sin-confirmar { border-color: var(--tenue); border-left-style: dashed; }
+.leyenda i.sin-confirmar { border: 2px dashed var(--tenue); background: none; margin-left: 8px; }

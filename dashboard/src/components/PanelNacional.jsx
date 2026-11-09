@@ -1,7 +1,11 @@
 const ETIQUETA = { falla_masiva: 'Falla masiva', posibles_problemas: 'Posibles problemas', normal: 'Normal' }
 
-export default function PanelNacional({ comunas, paises, nacional, actualizado, error, abierto, alternar }) {
+const FUENTE = { geoblackout: 'Geoblackout', fallacl: 'FallaCL', downdetector: 'Downdetector' }
+const nombres = (set) => [...set].map((f) => FUENTE[f] ?? f).join(' + ')
+
+export default function PanelNacional({ comunas, paises, nacional, tri, actualizado, error, abierto, alternar }) {
   const totalChile = paises.find((p) => p.pais === 'CL')?.total ?? 0
+  const verif = [...tri.values()].filter((e) => e.pais === 'CL').sort((a, b) => b.fuentes.size - a.fuentes.size)
   return (
     <aside className="panel" aria-label="Resumen de caídas">
       <button className="asa" onClick={alternar} aria-expanded={abierto}>
@@ -12,6 +16,18 @@ export default function PanelNacional({ comunas, paises, nacional, actualizado, 
 
       <div className="panel-cuerpo">
         {error && <p className="error">No pude leer los datos: {error}</p>}
+
+        <h2>Verificación cruzada</h2>
+        {verif.length === 0 && <p className="vacio">Ninguna fuente reporta fallas en la última hora.</p>}
+        <ul className="lista">
+          {verif.map((e) => (
+            <li key={e.empresa} className={e.confirmado ? 'falla_masiva' : 'sin-confirmar'}>
+              <span>{e.empresa}<small>{e.confirmado ? '✓ Confirmada' : 'Sin confirmar'} · {nombres(e.fuentes)}</small></span>
+              <b>{e.fuentes.size}/{2}</b>
+            </li>
+          ))}
+        </ul>
+        <p className="pie">Una falla se marca como confirmada solo si al menos 2 fuentes independientes la reportan en la última hora.</p>
 
         <h2>Zonas afectadas en Chile</h2>
         {comunas.filter((c) => c.pais === 'CL').length === 0 && (
@@ -49,10 +65,10 @@ export default function PanelNacional({ comunas, paises, nacional, actualizado, 
         )}
 
         <p className="leyenda">
-          <i className="falla_masiva" /> Falla masiva <i className="posibles_problemas" /> Posibles problemas
+          <i className="falla_masiva" /> Falla masiva <i className="posibles_problemas" /> Posibles problemas <i className="sin-confirmar" /> Sin confirmar
         </p>
         <p className="pie">
-          Actualizado {actualizado ? actualizado.toLocaleTimeString('es-CL') : '…'} · Fuente: reportes ciudadanos (Geoblackout)
+          Actualizado {actualizado ? actualizado.toLocaleTimeString('es-CL') : '…'} · Fuentes: reportes ciudadanos de Geoblackout y FallaCL
         </p>
       </div>
     </aside>
