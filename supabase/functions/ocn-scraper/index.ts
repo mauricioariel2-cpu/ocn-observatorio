@@ -452,8 +452,8 @@ function gravedadVolumen(n: number, posibles: number, masiva: number) {
 function gravedadTexto(t?: string) {
   if (!t) return null;
   const s = sinTildes(t);
-  if (/operativo|nivel habitual|no hay problemas/.test(s)) return "normal";
-  if (/menor|posibles problemas/.test(s)) return "posibles_problemas";
+  if (/operativo|operacional|nivel habitual|no hay problemas/.test(s)) return "normal";
+  if (/menor|instavel|posibles problemas/.test(s)) return "posibles_problemas";
   if (/critico|falla masiva/.test(s)) return "falla_masiva";
   return null;
 }
@@ -681,10 +681,13 @@ export async function parsearIoda(alertas: AlertaIoda[], ahora = new Date()): Pr
     } else if (a.entity.type === "region" || a.entity.type === "country") {
       const reg = a.entity.type === "region" ? regionDe(a.entity.name) : undefined;
       if (a.entity.type === "region" && !reg) continue;
+      const cc = a.entity.type === "country" ? a.entity.code : "CL";
+      const centro = cc === "CL" ? CENTRO_PAIS : PAISES_SA[cc]?.centro;
+      if (!centro) continue;
       const base = {
-        fuente: "ioda", pais: "CL", empresa: "Red completa", servicio: "internet",
+        fuente: "ioda", pais: cc, empresa: "Red completa", servicio: "internet",
         comuna: null, region: reg ? reg[0] : null,
-        latitud: reg ? reg[1] : CENTRO_PAIS[0], longitud: reg ? reg[2] : CENTRO_PAIS[1],
+        latitud: reg ? reg[1] : centro[0], longitud: reg ? reg[2] : centro[1],
         precision_geo: reg ? "region" : "pais", cantidad_reportes: null, gravedad: g,
         gravedad_texto: textoIoda(a), url_fuente: `https://ioda.inetintel.cc.gatech.edu/${a.entity.type}/${a.entity.code}`,
         ventana, raw: a,
@@ -1026,7 +1029,8 @@ async function filasIoda(): Promise<Fila[]> {
   const hasta = Math.floor(Date.now() / 1000);
   const desde = hasta - IODA_VENTANA_H * 3600;
   const q = (extra: string) => `${IODA_API}/outages/alerts?from=${desde}&until=${hasta}&limit=2000&${extra}`;
-  const consultas = ["entityType=asn&relatedTo=country/CL", "entityType=region&relatedTo=country/CL", "entityType=country&entityCode=CL"];
+  const consultas = ["entityType=asn&relatedTo=country/CL", "entityType=region&relatedTo=country/CL", "entityType=country&entityCode=CL",
+    ...Object.keys(PAISES_SA).map((cc) => `entityType=country&entityCode=${cc}`)];
   const alertas: AlertaIoda[] = [];
   for (const c of consultas) {
     const r = await fetch(q(c), { headers: cabeceras("application/json") });
@@ -1042,7 +1046,117 @@ async function filasBlackoutMap(): Promise<Fila[]> {
   // Solo se usa /data/status.json (sigue abierto), que trae las caídas medidas por región.
   const st = await fetch(`${BLACKOUT_URL}/data/status.json`, { headers: cabeceras("application/json") });
   if (!st.ok) { await st.body?.cancel(); throw new Error(`Blackout Map status.json HTTP ${st.status}`); }
-  const filas: Fila[] = await filasRegionesBM(await st.json());
+  const status = await st.json();
+  return [...await filasRegionesBM(status), ...await filasPaisesBM(status)];
+}
+
+// ── Otros países de Sudamérica: Argentina, Perú y Brasil (agregados 2026-11-09) ──
+// Sin mapa de ciudades: se muestran por compañía a nivel país. Centros = los de dashboard/src/lib/geo.js.
+export const PAISES_SA: Record<string, { gb: string; nombre: string; centro: [number, number] }> = {
+  AR: { gb: "ar", nombre: "Argentina", centro: [-34.6, -64.0] },
+  PE: { gb: "pe", nombre: "Perú", centro: [-9.2, -75.0] },
+  BR: { gb: "br", nombre: "Brasil", centro: [-14.2, -51.9] },
+};
+const RE_ESTADO_GB = /^(Operativo|Menor|Cr[ií]tico|Operacional|Inst[aá]vel)$/i;
+
+// Geoblackout de otro país: lee el estado que la página declara por compañía ("Claro / Operativo")
+// y cuántos de los comentarios recientes de usuarios nombran a cada una ("Todos 40 / Movistar 18 / ...").
+export async function parsearPaisGB(html: string, cc: string, url: string, ahora = new Date()): Promise<Fila[]> {
+  const info = PAISES_SA[cc];
+  if (!info) return [];
+  const l = lineasDeHtml(html);
+  const estados = new Map<string, string>();
+  const i = l.findIndex((x) => /^Todos (los proveedores|os operadores) de internet$/i.test(x));
+  if (i >= 0) for (let k = i + 1; k + 1 < l.length && RE_ESTADO_GB.test(l[k + 1]) && !RE_ESTADO_GB.test(l[k]); k += 2) if (/[a-z]/i.test(l[k])) estados.set(l[k], l[k + 1]);
+  const comentarios = new Map<string, number>();
+  const j = l.findIndex((x, k) => k > i && /^Tod[oa]s$/i.test(x) && /^\d+$/.test(l[k + 1] ?? ""));
+  if (j >= 0) for (let k = j + 2; k + 1 < l.length && /^\d+$/.test(l[k + 1]) && l[k].length <= 30; k += 2) comentarios.set(l[k], Number(l[k + 1]));
+  const ventana = ventana15(ahora);
+  const filas: Fila[] = [];
+  for (const empresa of new Set([...estados.keys(), ...comentarios.keys()])) {
+    const est = estados.get(empresa);
+    const n = comentarios.get(empresa) ?? 0;
+    const gravedad = gravedadTexto(est) ?? "normal";
+    if (!n && gravedad === "normal") continue;
+    const base = {
+      fuente: "geoblackout", pais: cc, empresa, servicio: "internet", comuna: null, region: null,
+      latitud: info.centro[0], longitud: info.centro[1], precision_geo: "pais", cantidad_reportes: n, gravedad,
+      gravedad_texto: (est ? `Estado en Geoblackout: ${est}` : "Sin estado declarado") + ` · ${n} comentario(s) recientes de usuarios`,
+      url_fuente: url, ventana, raw: { estado: est ?? null, comentarios: n },
+    };
+    filas.push({ ...base, hash_dedup: await hash(["geoblackout", cc, empresa, ventana]) });
+  }
+  return filas;
+}
+
+async function filasGeoblackoutSA(): Promise<Fila[]> {
+  const filas: Fila[] = [];
+  const errores: string[] = [];
+  for (const [cc, p] of Object.entries(PAISES_SA)) {
+    await pausa(1100); // robots.txt de Geoblackout: Crawl-delay 1
+    const url = `https://geoblackout.com/${p.gb}/report/internet`;
+    try {
+      const r = await fetch(url, { headers: cabeceras("text/html") });
+      const html = await r.text();
+      if (!r.ok || /cf-chl|challenge-platform/i.test(html.slice(0, 20000))) { errores.push(`${cc} ${r.status}`); continue; }
+      filas.push(...await parsearPaisGB(html, cc, url));
+    } catch (e) { errores.push(`${cc} ${e instanceof Error ? e.message : e}`); }
+  }
+  if (!filas.length && errores.length) throw new Error(`Geoblackout SA: ${errores.join("; ")}`);
+  return filas;
+}
+
+// RIPE Atlas por país: aún sin mapa de compañías (ASN) verificado, se mide la red completa.
+// Señal: muchas sondas que pasaron a "Disconnected" en las últimas horas a la vez.
+export async function parsearAtlasPais(sondas: SondaAtlas[], cc: string, ahora = new Date()): Promise<Fila[]> {
+  const info = PAISES_SA[cc];
+  if (!info) return [];
+  const t = ahora.getTime() / 1000;
+  let conectadas = 0;
+  const caidas: SondaAtlas[] = [];
+  for (const s of sondas) {
+    const reciente = s.status_since != null && t - s.status_since < ATLAS_CAIDA_H * 3600;
+    if (s.status?.name === "Connected") conectadas++;
+    else if (s.status?.name === "Disconnected" && reciente) caidas.push(s);
+  }
+  const total = conectadas + caidas.length, n = caidas.length;
+  if (!total) return [];
+  const gravedad = n >= 5 && n / total >= 0.2 ? "falla_masiva" : n >= 3 && n / total >= 0.08 ? "posibles_problemas" : "normal";
+  const ventana = ventana15(ahora);
+  const base = {
+    fuente: "atlas", pais: cc, empresa: "Red completa", servicio: "internet", comuna: null, region: null,
+    latitud: info.centro[0], longitud: info.centro[1], precision_geo: "pais", cantidad_reportes: null, gravedad,
+    gravedad_texto: `${n} de ${total} sondas RIPE Atlas de ${info.nombre} se desconectaron en las últimas ${ATLAS_CAIDA_H} h`,
+    url_fuente: `https://atlas.ripe.net/probes/?country_code=${cc}`, ventana, raw: { conectadas, caidas: n, total, ids: caidas.map((s) => s.id) },
+  };
+  return [{ ...base, hash_dedup: await hash(["atlas", cc, ventana]) }];
+}
+
+async function filasAtlasSA(): Promise<Fila[]> {
+  const filas: Fila[] = [];
+  for (const cc of Object.keys(PAISES_SA)) {
+    const r = await fetch(`${ATLAS_API}/probes/?country_code=${cc}&page_size=500&fields=id,asn_v4,status,status_since`, { headers: cabeceras("application/json") });
+    if (!r.ok) throw new Error(`RIPE Atlas ${cc} HTTP ${r.status}`);
+    filas.push(...await parsearAtlasPais((await r.json()).results ?? [], cc));
+  }
+  return filas;
+}
+
+// Blackout Map: estado de cada país ("countries" en status.json). Solo se guarda si no es normal.
+export async function filasPaisesBM(status: { countries?: Record<string, { s: string; up?: number; n?: number; since?: string; slug?: string }> }, ahora = new Date()) {
+  const ventana = ventana15(ahora);
+  const filas: Fila[] = [];
+  for (const [cc, info] of Object.entries(PAISES_SA)) {
+    const c = status?.countries?.[cc];
+    if (!c || !NIVEL_BM[c.s]) continue;
+    const base = {
+      fuente: "blackoutmap", pais: cc, empresa: "Red completa", servicio: "internet", comuna: null, region: null,
+      latitud: info.centro[0], longitud: info.centro[1], precision_geo: "pais", cantidad_reportes: null, gravedad: NIVEL_BM[c.s],
+      gravedad_texto: `Blackout Map: ${c.up ?? "?"} de ${c.n ?? "?"} sondas responden en ${info.nombre} (${c.s})` + (c.since ? ` desde ${c.since.slice(11, 16)} UTC` : ""),
+      url_fuente: `${BLACKOUT_URL}/country/${c.slug ?? cc.toLowerCase()}`, ventana, raw: c,
+    };
+    filas.push({ ...base, hash_dedup: await hash(["blackoutmap", "pais", cc, ventana]) });
+  }
   return filas;
 }
 
@@ -1056,7 +1170,8 @@ async function corrida(): Promise<Record<string, unknown>> {
   const filas: Fila[] = [];
   // Cada fuente va por separado: si una falla, la otra igual se guarda.
   // Las fuentes se piden en paralelo (son sitios distintos) y cada una tiene su propio tiempo máximo.
-  const fuentes = [["geoblackout", filasGeoblackout], ["fallacl", filasFallacl], ["ioda", filasIoda], ["blackoutmap", filasBlackoutMap], ["atlas", filasAtlas], ["bluesky", filasBluesky]] as const;
+  const fuentes = [["geoblackout", filasGeoblackout], ["fallacl", filasFallacl], ["ioda", filasIoda], ["blackoutmap", filasBlackoutMap], ["atlas", filasAtlas], ["bluesky", filasBluesky],
+    ["geoblackout_sa", filasGeoblackoutSA], ["atlas_sa", filasAtlasSA]] as const;
   const [resultados, sec] = await Promise.all([
     Promise.allSettled(fuentes.map(([, fn]) => fn())),
     guardarSec().catch((e) => `error: ${e instanceof Error ? e.message : e}`),
