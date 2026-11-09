@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import L from 'leaflet'
-import { MapContainer, Marker, Popup, TileLayer, ZoomControl, useMap, useMapEvents } from 'react-leaflet'
+import { CircleMarker, MapContainer, Marker, Popup, TileLayer, Tooltip, ZoomControl, useMap, useMapEvents } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import { FUENTES_TOTALES, puntosRegion, verifDe } from '../lib/datos'
-import { VISTAS, nivelPorZoom } from '../lib/geo'
+import { REGIONES_CL, VISTAS, nivelPorZoom } from '../lib/geo'
 
 const SERVICIO = { internet_fijo: 'Internet hogar', internet_movil: 'Internet móvil', tv: 'TV', internet: 'Internet', telefonia_fija: 'Telefonía', streaming: 'Streaming', banca: 'Banca' }
+const norm = (t) => String(t ?? '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
 const FUENTE = { geoblackout: 'Geoblackout', fallacl: 'FallaCL', ioda: 'IODA (Georgia Tech)', blackoutmap: 'Blackout Map', downdetector: 'Downdetector' }
 
 function hace(iso) {
@@ -57,6 +58,12 @@ export default function MapaCaidas({ comunas, paises, vista, nuevos, tri }) {
     const sinDetalle = paises.filter((p) => enVista(p) && !conDetalle.has(p.pais)) // país con solo total nacional
     return [...(nivel === 'region' ? puntosRegion(lugares) : lugares), ...sinDetalle]
   }, [nivel, comunas, paises, vista])
+  // Regiones vigiladas sin fallas: punto verde, para que se vea todo Chile.
+  const tranquilas = useMemo(() => {
+    if (nivel === 'pais' || vista !== 'chile') return []
+    const conFalla = new Set(puntos.flatMap((p) => [p.titulo, p.subtitulo, ...p.detalle.map((f) => f.region)]).map(norm))
+    return REGIONES_CL.filter(([n]) => !conFalla.has(norm(n)))
+  }, [nivel, vista, puntos])
   const iconos = useMemo(
     () => Object.fromEntries(puntos.map((p) => [p.id, icono(
       p,
@@ -96,6 +103,12 @@ export default function MapaCaidas({ comunas, paises, vista, nuevos, tri }) {
       <ZoomControl position="bottomright" />
       <Camara vista={vista} />
       <SeguirZoom alCambiar={setZoom} />
+      {tranquilas.map(([nombre, lat, lon]) => (
+        <CircleMarker key={nombre} center={[lat, lon]} radius={6} className="region-ok"
+          pathOptions={{ color: '#34c759', fillColor: '#34c759', fillOpacity: 0.55, weight: 1.5 }}>
+          <Tooltip direction="top">{nombre}: sin fallas reportadas ahora</Tooltip>
+        </CircleMarker>
+      ))}
       {puntos.map((p) => (
         <Marker key={p.id} position={[p.lat, p.lon]} icon={iconos[p.id]}>
           <Popup>

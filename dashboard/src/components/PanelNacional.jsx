@@ -67,7 +67,7 @@ export default function PanelNacional({ comunas, paises, nacional, tri, actualiz
         )}
 
         <p className="leyenda">
-          <i className="falla_masiva" /> Falla masiva <i className="posibles_problemas" /> Posibles problemas <i className="sin-confirmar" /> Sin confirmar
+          <i className="falla_masiva" /> Falla masiva <i className="posibles_problemas" /> Posibles problemas <i className="sin-confirmar" /> Sin confirmar <i className="region-ok" /> Sin fallas
         </p>
         <p className="pie">
           Actualizado {actualizado ? actualizado.toLocaleTimeString('es-CL') : '…'} · Fuentes: Geoblackout, FallaCL, IODA (© Georgia Tech Research Corporation) y <a href="https://blackoutmap.net" target="_blank" rel="noreferrer">Blackout Map</a> (CC BY-NC 4.0)

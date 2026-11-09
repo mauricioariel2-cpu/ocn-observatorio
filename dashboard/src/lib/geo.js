@@ -27,3 +27,16 @@ export const PAISES = {
   ES: { nombre: 'España', centro: [40.4, -3.7] },
   US: { nombre: 'Estados Unidos', centro: [39.8, -98.6] },
 }
+
+// Las 16 regiones de Chile (centro aproximado en su capital), para mostrar
+// también las zonas vigiladas que hoy no tienen fallas.
+export const REGIONES_CL = [
+  ['Arica y Parinacota', -18.4783, -70.3126], ['Tarapacá', -20.2133, -70.1503],
+  ['Antofagasta', -23.6509, -70.3975], ['Atacama', -27.3668, -70.3314],
+  ['Coquimbo', -29.9027, -71.2519], ['Valparaíso', -33.0472, -71.6127],
+  ['Metropolitana', -33.4489, -70.6693], ["O'Higgins", -34.1708, -70.7444],
+  ['Maule', -35.4264, -71.6554], ['Ñuble', -36.6066, -72.1034],
+  ['Biobío', -36.827, -73.0503], ['Araucanía', -38.7359, -72.5904],
+  ['Los Ríos', -39.8142, -73.2459], ['Los Lagos', -41.4689, -72.9411],
+  ['Aysén', -45.5712, -72.0685], ['Magallanes', -53.1638, -70.9171],
+]

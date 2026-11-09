@@ -125,3 +125,4 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .sello.ok { color: var(--verde); }
 .lista li.sin-confirmar { border-color: var(--tenue); border-left-style: dashed; }
 .leyenda i.sin-confirmar { border: 2px dashed var(--tenue); background: none; margin-left: 8px; }
+.leyenda i.region-ok { background: var(--verde); margin-left: 8px; width: 10px; height: 10px; }
