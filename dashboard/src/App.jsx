@@ -1,7 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import MapaCaidas from './components/MapaCaidas'
 import PanelNacional from './components/PanelNacional'
-import { cargarReportes, escucharNuevos, estadoNacional, mezclar, puntosComuna, puntosPais, triangular } from './lib/datos'
+import ReportarFalla from './components/ReportarFalla'
+import { REGIONES_CL } from './lib/geo'
+import { cargarReportes, cargarVecinos, escucharNuevos, estadoNacional, mezclar, puntosComuna, puntosPais, resumirVecinos, triangular } from './lib/datos'
+
+const CENTROS = Object.fromEntries(REGIONES_CL.map(([n, la, lo]) => [n, [la, lo]]))
 
 const REFRESCO_MS = 60_000 // respaldo por si se corta el canal en vivo
 const DESTACAR_MS = 20_000 // cuánto parpadea un círculo con reportes nuevos
@@ -14,6 +18,12 @@ export default function App() {
   const [vista, setVista] = useState('chile')
   const [panelAbierto, setPanelAbierto] = useState(false)
   const [nuevos, setNuevos] = useState(() => new Set())
+  const [vecinos, setVecinos] = useState([])
+  const [reporte, setReporte] = useState({ abierto: false, region: '' })
+
+  async function recargarVecinos() {
+    try { setVecinos(await cargarVecinos()) } catch { /* si la tabla aún no existe, el mapa sigue funcionando */ }
+  }
 
   useEffect(() => {
     let vivo = true
@@ -30,7 +40,8 @@ export default function App() {
       }
     }
     recargar()
-    const id = setInterval(recargar, REFRESCO_MS)
+    recargarVecinos()
+    const id = setInterval(() => { recargar(); recargarVecinos() }, REFRESCO_MS)
     const salir = escucharNuevos(
       (fila) => {
         setFilas((act) => mezclar(act, [fila]))
@@ -48,10 +59,11 @@ export default function App() {
     }
   }, [])
 
-  const comunas = useMemo(() => puntosComuna(filas), [filas])
-  const paises = useMemo(() => puntosPais(filas), [filas])
-  const nacional = useMemo(() => estadoNacional(filas, 'CL'), [filas])
-  const tri = useMemo(() => triangular(filas), [filas])
+  const todas = useMemo(() => [...filas, ...resumirVecinos(vecinos, CENTROS)], [filas, vecinos])
+  const comunas = useMemo(() => puntosComuna(todas), [todas])
+  const paises = useMemo(() => puntosPais(todas), [todas])
+  const nacional = useMemo(() => estadoNacional(todas, 'CL'), [todas])
+  const tri = useMemo(() => triangular(todas), [todas])
 
   return (
     <div className={`app ${panelAbierto ? 'panel-abierto' : ''}`}>
@@ -76,7 +88,8 @@ export default function App() {
       </header>
 
       <main className="contenido">
-        <MapaCaidas comunas={comunas} paises={paises} vista={vista} nuevos={nuevos} tri={tri} />
+        <MapaCaidas comunas={comunas} paises={paises} vista={vista} nuevos={nuevos} tri={tri}
+          meAfecta={(region) => setReporte({ abierto: true, region: region ?? '' })} />
         <PanelNacional
           comunas={comunas}
           paises={paises}
@@ -87,7 +100,10 @@ export default function App() {
           abierto={panelAbierto}
           alternar={() => setPanelAbierto((a) => !a)}
         />
+        <button className="btn-reportar" onClick={() => setReporte({ abierto: true, region: '' })}>⚠ Reportar falla</button>
       </main>
+      <ReportarFalla abierto={reporte.abierto} regionInicial={reporte.region}
+        cerrar={() => setReporte({ abierto: false, region: '' })} alEnviar={recargarVecinos} />
     </div>
   )
 }

@@ -2,7 +2,7 @@ const ETIQUETA = { falla_masiva: 'Falla masiva', posibles_problemas: 'Posibles p
 
 import { FUENTES_TOTALES } from '../lib/datos'
 
-const FUENTE = { geoblackout: 'Geoblackout', fallacl: 'FallaCL', ioda: 'IODA', blackoutmap: 'Blackout Map', downdetector: 'Downdetector' }
+const FUENTE = { geoblackout: 'Geoblackout', fallacl: 'FallaCL', ioda: 'IODA', blackoutmap: 'Blackout Map', ocn: 'Vecinos OCN', downdetector: 'Downdetector' }
 const nombres = (set) => [...set].map((f) => FUENTE[f] ?? f).join(' + ')
 
 export default function PanelNacional({ comunas, paises, nacional, tri, actualizado, error, abierto, alternar }) {
@@ -29,7 +29,7 @@ export default function PanelNacional({ comunas, paises, nacional, tri, actualiz
             </li>
           ))}
         </ul>
-        <p className="pie">Una falla se marca como confirmada solo si al menos 2 fuentes independientes la reportan en la última hora: reportes ciudadanos (Geoblackout, FallaCL) y mediciones de red (IODA, sondas de Blackout Map).</p>
+        <p className="pie">Una falla se marca como confirmada solo si al menos 2 fuentes independientes la reportan en la última hora: reportes ciudadanos (Geoblackout, FallaCL, vecinos en OCN) y mediciones de red (IODA, sondas de Blackout Map).</p>
 
         <h2>Zonas afectadas en Chile</h2>
         {comunas.filter((c) => c.pais === 'CL').length === 0 && (

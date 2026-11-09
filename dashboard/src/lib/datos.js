@@ -125,7 +125,7 @@ export function estadoNacional(filas, pais = 'CL') {
 // Con una sola fuente se muestra como "sin confirmar". Nunca se inventan datos:
 // todo lo que se ve sale de filas reales de reportes_caidas, con su enlace de origen.
 export const MIN_FUENTES = 2
-export const FUENTES_TOTALES = 4 // Geoblackout, FallaCL, IODA, Blackout Map
+export const FUENTES_TOTALES = 5 // Geoblackout, FallaCL, IODA, Blackout Map, OCN (vecinos)
 const VENTANA_CRUCE_MIN = 60
 
 export function claveEmpresa(nombre) {
@@ -153,4 +153,46 @@ export function triangular(filas, ahora = Date.now()) {
 
 export function verifDe(tri, f) {
   return tri.get(`${paisDe(f)}|${claveEmpresa(f.empresa)}`) ?? { fuentes: new Set(), confirmado: false }
+}
+
+// ---------- Reportes propios de OCN (botón "Me afecta") ----------
+export async function cargarVecinos(horas = HORAS_VENTANA) {
+  const { data, error } = await supabase
+    .from('reportes_usuarios')
+    .select('id, creado_en, empresa, servicio, region, comuna, latitud, longitud')
+    .gte('creado_en', desdeISO(horas))
+    .order('creado_en', { ascending: false })
+    .limit(5000)
+  if (error) throw error
+  return data ?? []
+}
+
+export async function enviarReporte(reporte) {
+  const { error } = await supabase.from('reportes_usuarios').insert(reporte)
+  if (error) throw new Error(error.message)
+}
+
+// Agrupa los reportes de vecinos por empresa, servicio y región, como filas
+// con el mismo formato que reportes_caidas (fuente "ocn"). Se cuentan, no se estiman.
+export function resumirVecinos(vecinos, centros) {
+  const grupos = new Map()
+  for (const v of vecinos) {
+    const k = [v.empresa, v.servicio, v.region].join('|')
+    const g = grupos.get(k) ?? { ...v, n: 0, comunas: new Set(), ultimo: v.creado_en }
+    g.n += 1
+    if (v.comuna) g.comunas.add(v.comuna)
+    if (v.creado_en > g.ultimo) g.ultimo = v.creado_en
+    grupos.set(k, g)
+  }
+  return [...grupos.entries()].map(([k, g]) => {
+    const c = centros[g.region]
+    return {
+      id: `ocn|${k}`, hash_dedup: `ocn|${k}`, fuente: 'ocn', pais: 'CL', empresa: g.empresa, servicio: g.servicio,
+      comuna: null, region: g.region, latitud: c?.[0] ?? null, longitud: c?.[1] ?? null, precision_geo: 'region',
+      cantidad_reportes: g.n, gravedad: g.n >= 5 ? 'falla_masiva' : g.n >= 2 ? 'posibles_problemas' : 'normal',
+      gravedad_texto: `${g.n} vecino(s) reportaron en OCN en las últimas ${HORAS_VENTANA} h` +
+        (g.comunas.size ? ` (${[...g.comunas].slice(0, 5).join(', ')})` : ''),
+      ventana: g.ultimo, capturado_en: g.ultimo, url_fuente: null,
+    }
+  })
 }

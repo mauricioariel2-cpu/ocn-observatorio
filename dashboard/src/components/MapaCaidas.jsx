@@ -7,7 +7,7 @@ import { REGIONES_CL, VISTAS, nivelPorZoom } from '../lib/geo'
 
 const SERVICIO = { internet_fijo: 'Internet hogar', internet_movil: 'Internet móvil', tv: 'TV', internet: 'Internet', telefonia_fija: 'Telefonía', streaming: 'Streaming', banca: 'Banca' }
 const norm = (t) => String(t ?? '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
-const FUENTE = { geoblackout: 'Geoblackout', fallacl: 'FallaCL', ioda: 'IODA (Georgia Tech)', blackoutmap: 'Blackout Map', downdetector: 'Downdetector' }
+const FUENTE = { geoblackout: 'Geoblackout', fallacl: 'FallaCL', ioda: 'IODA (Georgia Tech)', blackoutmap: 'Blackout Map', ocn: 'Vecinos en OCN', downdetector: 'Downdetector' }
 
 function hace(iso) {
   const min = Math.round((Date.now() - Date.parse(iso)) / 60000)
@@ -46,7 +46,7 @@ function SeguirZoom({ alCambiar }) {
   return null
 }
 
-export default function MapaCaidas({ comunas, paises, vista, nuevos, tri }) {
+export default function MapaCaidas({ comunas, paises, vista, nuevos, tri, meAfecta }) {
   const [zoom, setZoom] = useState(4)
   const nivel = nivelPorZoom(zoom)
   const puntos = useMemo(() => {
@@ -139,7 +139,7 @@ export default function MapaCaidas({ comunas, paises, vista, nuevos, tri }) {
                 })}
               </ul>
               {nivel !== 'comuna' && <em className="popup-tip">Acércate para ver más detalle</em>}
-              <button className="btn-afecta" disabled title="Llega con el motor de reclamos">Me afecta</button>
+              <button className="btn-afecta" onClick={() => meAfecta?.(REGIONES_CL.some(([n]) => n === (p.subtitulo ?? p.titulo)) ? (p.subtitulo ?? p.titulo) : p.detalle.find((f) => f.region)?.region)}>Me afecta</button>
             </div>
           </Popup>
         </Marker>
