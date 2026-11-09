@@ -1,6 +1,6 @@
 // Service worker mínimo: permite instalar la app y abrirla sin conexión.
 // Los datos de Supabase y los mapas siempre van a la red (nunca se cachean).
-const CACHE = 'ocn-v1'
+const CACHE = 'ocn-v2'
 const BASE = new URL('./', self.location).pathname
 
 self.addEventListener('install', (e) => {

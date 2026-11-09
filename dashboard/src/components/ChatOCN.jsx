@@ -3,6 +3,7 @@ import { enviarReporte } from '../lib/datos'
 import { REGIONES_CL } from '../lib/geo'
 import { detectarCompania } from '../lib/isp'
 import { dispositivo, guardarPerfil, leerPerfil } from '../lib/perfil'
+import { aceptar, consentimiento } from '../lib/privacidad'
 import { DERECHOS_SUBTEL, PORTAL_SUBTEL, cargarReclamos, registrarReclamo, servicioTexto, textoReclamo } from '../lib/reclamos'
 import {
   FICHA_CHILEATIENDE, PLAZO_CORTO, PLAZO_LARGO, actualizarReclamo, agregarReclamo, compensacion, descargarCalendario,
@@ -25,7 +26,7 @@ function regionCercana(lat, lon) {
 
 // Chat guiado: el asistente conversa con la persona afectada y le pide los datos de a uno.
 // Las respuestas del bot son guiones fijos; todos los números que muestra son conteos reales.
-export default function ChatOCN({ contar, abierto, setAbierto, verMapa }) {
+export default function ChatOCN({ contar, abierto, setAbierto, verMapa, verPrivacidad }) {
   const [msgs, setMsgs] = useState([])
   const [escribiendo, setEscribiendo] = useState(false)
   const [opciones, setOpciones] = useState(null) // { tipo: 'botones'|'region'|'texto', ... }
@@ -56,9 +57,35 @@ export default function ChatOCN({ contar, abierto, setAbierto, verMapa }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [abierto])
 
-  async function inicio() {
+  // Ley 21.719: consentimiento informado antes de tratar datos (incluida la consulta a RIPE NCC).
+  function inicio() {
+    if (consentimiento()) continuar(true)
+    else pedirConsentimiento(false)
+  }
+
+  async function pedirConsentimiento(repetir) {
+    if (!repetir) {
+      await bot(
+        'Hola 👋 Soy el asistente de OCN. Antes de empezar, lo importante sobre tus datos:',
+        'No te pido nombre ni RUT. Si reportas, guardo tu compañía, servicio, región, comuna (si me la das) y un **código aleatorio de este celular** para evitar reportes repetidos. Tu ubicación, solo si la compartes, redondeada a ~1 km.',
+        'Para reconocer tu compañía, tu navegador le pregunta a **RIPE NCC** (Países Bajos) a qué red pertenece tu conexión; OCN no guarda tu IP. Puedes ver, descargar o borrar tus datos cuando quieras en **Privacidad**.',
+      )
+    } else await bot('¿Aceptas para que te ayude a reportar?')
+    preguntar({ tipo: 'botones', destacado: 'Acepto', items: [
+      ['Acepto', () => { aceptar(); continuar(false) }],
+      ['Leer la política', () => { setAbierto(false); verPrivacidad?.(); pedirConsentimiento(true) }],
+      ['Ahora no', noAcepta],
+    ] })
+  }
+
+  async function noAcepta() {
+    await bot('Entendido, no guardo nada 👍 Igual puedes mirar el mapa sin reportar.')
+    preguntar({ tipo: 'botones', items: [['Cambié de opinión', () => pedirConsentimiento(true)], ['Ver el mapa', () => { setAbierto(false); verMapa?.() }]] })
+  }
+
+  async function continuar(saludo) {
     const deteccion = detectarCompania().catch(() => null)
-    await bot('Hola 👋 Soy el asistente de OCN. Estoy revisando tu conexión…')
+    await bot(saludo ? 'Hola 👋 Soy el asistente de OCN. Estoy revisando tu conexión…' : 'Gracias 🙌 Estoy revisando tu conexión…')
     red.current = await deteccion
     const r = red.current
     if (r?.empresa) await bot(`Veo que te conectas por **${r.empresa}** (red AS${r.asn}).`)
@@ -149,6 +176,7 @@ export default function ChatOCN({ contar, abierto, setAbierto, verMapa }) {
   }
 
   async function enviar() {
+    if (!consentimiento()) { pedirConsentimiento(true); return }
     const d = datos.current
     setEscribiendo(true)
     try {
@@ -353,6 +381,7 @@ export default function ChatOCN({ contar, abierto, setAbierto, verMapa }) {
           <b>Asistente OCN</b>
           <small>{escribiendo ? 'escribiendo…' : 'en línea'}</small>
         </div>
+        <button className="asis-priv" onClick={() => { setAbierto(false); verPrivacidad?.() }}>Privacidad</button>
         <button className="asis-min" onClick={() => setAbierto(false)} aria-label="Cerrar el asistente">✕</button>
       </header>
       <div className="chat-hilo" aria-live="polite">

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { enviarReporte } from '../lib/datos'
 import { dispositivo, guardarPerfil, leerPerfil } from '../lib/perfil'
+import { aceptar, consentimiento } from '../lib/privacidad'
 import NoEresElUnico from './NoEresElUnico'
 import { REGIONES_CL } from '../lib/geo'
 
@@ -17,7 +18,7 @@ function regionCercana(lat, lon) {
   return mejor?.nombre
 }
 
-export default function ReportarFalla({ abierto, cerrar, regionInicial, alEnviar, contar }) {
+export default function ReportarFalla({ abierto, cerrar, regionInicial, alEnviar, contar, verPrivacidad }) {
   const recordado = leerPerfil()
   const [empresa, setEmpresa] = useState(recordado?.empresa ?? '')
   const [servicio, setServicio] = useState(recordado?.servicio ?? 'internet_fijo')
@@ -25,9 +26,10 @@ export default function ReportarFalla({ abierto, cerrar, regionInicial, alEnviar
   const [comuna, setComuna] = useState(recordado?.comuna ?? '')
   const [coords, setCoords] = useState(null)
   const [estado, setEstado] = useState({ tipo: 'idle' })
+  const [acepta, setAcepta] = useState(() => !!consentimiento())
 
   useEffect(() => {
-    if (abierto) { setEstado({ tipo: 'idle' }); if (regionInicial) setRegion(regionInicial) }
+    if (abierto) { setEstado({ tipo: 'idle' }); setAcepta(!!consentimiento()); if (regionInicial) setRegion(regionInicial) }
   }, [abierto, regionInicial])
 
   if (!abierto) return null
@@ -55,6 +57,8 @@ export default function ReportarFalla({ abierto, cerrar, regionInicial, alEnviar
   async function enviar(e) {
     e.preventDefault()
     if (!empresa || !region) return setEstado({ tipo: 'error', msg: 'Elige tu compañía y tu región.' })
+    if (!acepta) return setEstado({ tipo: 'error', msg: 'Para reportar, acepta la política de privacidad.' })
+    aceptar()
     setEstado({ tipo: 'enviando' })
     try {
       const perfil = { empresa, servicio, region, comuna: comuna.trim() || null }
@@ -104,11 +108,17 @@ export default function ReportarFalla({ abierto, cerrar, regionInicial, alEnviar
             <label>Comuna (opcional)
               <input value={comuna} onChange={(e) => setComuna(e.target.value)} maxLength={60} placeholder="Ej: Maipú" />
             </label>
+            {!consentimiento() && (
+              <label className="pv-check">
+                <input type="checkbox" checked={acepta} onChange={(e) => setAcepta(e.target.checked)} />
+                <span>Acepto que OCN guarde este reporte (sin nombre ni RUT) con un código aleatorio de este celular, según la <button type="button" className="btn-link" onClick={() => { cerrar(); verPrivacidad?.() }}>política de privacidad</button>.</span>
+              </label>
+            )}
             {estado.tipo === 'error' && <p className="error">{estado.msg}</p>}
             <button type="submit" className="btn-primario" disabled={estado.tipo === 'enviando'}>
               {estado.tipo === 'enviando' ? 'Enviando…' : 'Enviar reporte'}
             </button>
-            <p className="nota">No guardamos tu IP ni tu ubicación exacta. Máximo un reporte cada 30 minutos.</p>
+            <p className="nota">No guardamos tu IP ni tu ubicación exacta. Máximo un reporte cada 30 minutos. Puedes borrar tus datos en Privacidad.</p>
             <button type="button" className="cerrar" onClick={cerrar} aria-label="Cerrar">✕</button>
           </>
         )}

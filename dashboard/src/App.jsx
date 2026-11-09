@@ -5,6 +5,7 @@ import ReportarFalla from './components/ReportarFalla'
 import ChatOCN from './components/ChatOCN'
 import Estadisticas from './components/Estadisticas'
 import CortesLuz from './components/CortesLuz'
+import Privacidad from './components/Privacidad'
 import { cargarCortesLuz } from './lib/luz'
 import { PAISES, REGIONES_CL, VISTAS_PAIS } from './lib/geo'
 import { cargarReportes, cargarVecinos, coincidencias, contarSimilares, escucharNuevos, estadoNacional, mezclar, puntosComuna, puntosPais, resumirVecinos, semaforoRegiones, triangular } from './lib/datos'
@@ -113,10 +114,12 @@ export default function App() {
           {NAV.map(([v, t]) => (
             <button key={v} className={vista === v || (v === 'mundo' && ['ar', 'pe', 'br'].includes(vista)) ? 'activo' : ''} onClick={() => ir(v)}>{t}</button>
           ))}
+          <button className={vista === 'privacidad' ? 'activo' : ''} onClick={() => ir('privacidad')}>Privacidad</button>
         </nav>
         <span className={`vivo ${enVivo ? 'on' : ''}`} title={enVivo ? 'Conectado en vivo' : 'Actualizando cada minuto'}>
           <i /> {enVivo ? 'En vivo' : 'Cada 1 min'}
         </span>
+        <button className={`btn-priv ${vista === 'privacidad' ? 'activo' : ''}`} onClick={() => ir('privacidad')} aria-label="Privacidad y tus datos" title="Privacidad y tus datos"><Icono n="candado" /></button>
         <button className="btn-reportar-top" onClick={() => setChatAbierto(true)}>Reportar falla</button>
       </header>
 
@@ -155,6 +158,7 @@ export default function App() {
       )}
 
       {vista === 'tendencias' && <main className="contenido scroll"><Estadisticas nacional={nacional} vecinos={vecinos} /></main>}
+      {vista === 'privacidad' && <main className="contenido scroll"><Privacidad /></main>}
       {vista === 'luz' && (
         <main className="contenido scroll">
           <CortesLuz luz={luz} error={errorLuz} verEnMapa={() => { setCapaLuz(true); ir('chile') }} />
@@ -184,7 +188,7 @@ export default function App() {
           <span className="fab-txt"><b>¿Se te cayó?</b> Repórtalo en 10 segundos</span>
         </button>
       )}
-      <ChatOCN contar={contar} abierto={chatAbierto} setAbierto={setChatAbierto} verMapa={() => ir('chile')} />
+      <ChatOCN contar={contar} abierto={chatAbierto} setAbierto={setChatAbierto} verMapa={() => ir('chile')} verPrivacidad={() => ir('privacidad')} />
 
       <nav className="tabbar" aria-label="Secciones">
         {NAV.slice(0, 2).map(([v, t, ic]) => (
@@ -197,7 +201,7 @@ export default function App() {
       </nav>
 
       <ReportarFalla abierto={reporte.abierto} regionInicial={reporte.region}
-        contar={contar}
+        contar={contar} verPrivacidad={() => ir('privacidad')}
         cerrar={() => { setReporte({ abierto: false, region: '' }); setVersionPerfil((n) => n + 1) }} />
     </div>
   )
@@ -210,6 +214,7 @@ const TRAZOS = {
   tendencias: 'M3 20h18M5 16l4-5 4 3 6-8',
   luz: 'M13 2 4 14h7l-1 8 9-12h-7l1-8Z',
   mas: 'M12 5v14M5 12h14',
+  candado: 'M7 11V8a5 5 0 0 1 10 0v3M5 11h14v10H5V11Zm7 4v2',
 }
 function Icono({ n }) {
   return (
