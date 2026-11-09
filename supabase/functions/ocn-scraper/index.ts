@@ -1104,12 +1104,14 @@ export type ComentarioGB = { id: string; empresa: string; texto: string; creado:
 export function comentariosGB(html: string, cc: string, ahora = new Date()): ComentarioGB[] {
   const ops = OPERADORES_SA[cc] ?? [];
   const h = html.replace(/\\"/g, '"');
-  const re = /"id":"(\w{8,})","reportKey":"([^"]+)"[^{}]*?"text":"((?:[^"\\]|\\.)*)","createdAt":"([^"]+)"[^{}]*?"city":(?:null|"((?:[^"\\]|\\.)*)")[^{}]*?"sameCount":(\d+)/g;
+  // "city" no siempre viene: se busca dentro del resto del comentario.
+  const re = /"id":"(\w{8,})","reportKey":"([^"]+)"[^{}]*?"text":"((?:[^"\\]|\\.)*)","createdAt":"([^"]+)"([^{}]*?)"sameCount":(\d+)/g;
   const vistos = new Set<string>();
   const out: ComentarioGB[] = [];
   for (const m of h.matchAll(re)) {
-    const [, id, clave, texto, creado, ciudad, mismo] = m;
-    if (vistos.has(id) || !ciudad) continue;
+    const [, id, clave, texto, creado, resto, mismo] = m;
+    const ciudad = /"city":"((?:[^"\\]|\\.)*)"/.exec(resto)?.[1] ?? "";
+    if (vistos.has(id)) continue;
     vistos.add(id);
     const edadH = (ahora.getTime() - Date.parse(creado)) / 3600_000;
     if (!(edadH >= 0 && edadH <= VENTANA_SA_H)) continue;
@@ -1122,8 +1124,7 @@ export function comentariosGB(html: string, cc: string, ahora = new Date()): Com
   return out;
 }
 
-// Coordenadas de una ciudad: primero las que ya guardamos antes; si no, OpenStreetMap (Nominatim),
-// respetando su política: 1 consulta por segundo, agente identificado y resultados guardados.
+// Coordenadas de una ciudad: primero las que ya guardamos antes; si no, el buscador de Open-Meteo (pocas consultas por corrida).
 const cacheCiudades = new Map<string, { lat: number; lon: number; region: string | null } | null>();
 async function ubicarCiudad(cc: string, ciudad: string, cupo: { n: number }) {
   const k = `${cc}|${sinTildes(ciudad)}`;
@@ -1132,15 +1133,19 @@ async function ubicarCiudad(cc: string, ciudad: string, cupo: { n: number }) {
   if (prev) { const v = { lat: prev.latitud, lon: prev.longitud, region: prev.region }; cacheCiudades.set(k, v); return v; }
   if (cupo.n <= 0) return null; // se ubicará en una próxima corrida
   cupo.n--;
-  await pausa(1100);
-  const q = new URLSearchParams({ q: ciudad, countrycodes: cc.toLowerCase(), format: "jsonv2", limit: "1", addressdetails: "1", "accept-language": "es" });
-  const r = await fetch(`https://nominatim.openstreetmap.org/search?${q}`, { headers: { "User-Agent": `${CONTACTO} (+https://ocn-chile.netlify.app)`, Accept: "application/json" } });
-  if (!r.ok) { await r.body?.cancel(); return null; }
-  const [g] = await r.json() as { lat: string; lon: string; address?: { state?: string } }[];
-  const v = g ? { lat: Number(g.lat), lon: Number(g.lon), region: g.address?.state ?? null } : null;
+  // Nominatim (OpenStreetMap) responde 403 a los servidores de Supabase, así que se usa el buscador de lugares
+  // de Open-Meteo (datos GeoNames, gratis para uso no comercial, sin clave). Si OCN pasa a uso comercial, revisar sus términos.
+  const q = new URLSearchParams({ name: ciudad, countryCode: cc, count: "1", language: "es", format: "json" });
+  const r = await fetch(`https://geocoding-api.open-meteo.com/v1/search?${q}`, { headers: { "User-Agent": `${CONTACTO} (+https://ocn-chile.netlify.app)`, Accept: "application/json" } });
+  if (!r.ok) { await r.body?.cancel(); throw new Error(`Open-Meteo geocoding HTTP ${r.status}`); }
+  const g = ((await r.json()) as { results?: { latitude: number; longitude: number; admin1?: string }[] }).results?.[0];
+  const v = g ? { lat: g.latitude, lon: g.longitude, region: g.admin1 ?? null } : null;
   cacheCiudades.set(k, v);
   return v;
 }
+
+// Diagnóstico de la última corrida (va en la respuesta del robot): filas por ciudad / por país y errores.
+const diagSA: Record<string, Record<string, number | string>> = {};
 
 export async function filasComentariosGB(coms: ComentarioGB[], cc: string, url: string, ubicar: (ciudad: string) => Promise<{ lat: number; lon: number; region: string | null } | null>, ahora = new Date()) {
   const ventana = ventana15(ahora);
@@ -1151,19 +1156,23 @@ export async function filasComentariosGB(coms: ComentarioGB[], cc: string, url: 
   }
   const filas: Fila[] = [];
   for (const lista of grupos.values()) {
-    const { empresa, ciudad } = lista[0];
-    const pos = await ubicar(ciudad);
-    if (!pos) continue;
+    const { empresa } = lista[0];
+    // Sin ciudad, o ciudad que aún no se pudo ubicar: la fila queda a nivel país (igual sirve para cruzar países).
+    const pos = lista[0].ciudad ? await ubicar(lista[0].ciudad) : null;
+    const ciudad = pos ? lista[0].ciudad : null;
+    const centro = PAISES_SA[cc]?.centro;
+    if (!pos && !centro) continue;
+    diagSA[cc] = { ...(diagSA[cc] ?? {}), [pos ? "ciudad" : "pais"]: Number(diagSA[cc]?.[pos ? "ciudad" : "pais"] ?? 0) + 1 };
     const n = lista.reduce((s, c) => s + 1 + c.mismo, 0);
     const masNuevo = lista.map((c) => c.creado).sort().at(-1)!;
     const horas = Math.max(0, Math.round((ahora.getTime() - Date.parse(masNuevo)) / 3600_000));
     const base = {
-      fuente: "geoblackout", pais: cc, empresa, servicio: "internet", comuna: ciudad, region: pos.region,
-      latitud: pos.lat, longitud: pos.lon, precision_geo: "comuna", cantidad_reportes: n, gravedad: gravedadVolumen(n, 2, 6),
-      gravedad_texto: `${lista.length} comentario(s) + ${n - lista.length} "mismo problema" en ${ciudad}; el más reciente hace ${horas} h`,
+      fuente: "geoblackout", pais: cc, empresa, servicio: "internet", comuna: ciudad, region: pos?.region ?? null,
+      latitud: pos ? pos.lat : centro![0], longitud: pos ? pos.lon : centro![1], precision_geo: pos ? "comuna" : "pais", cantidad_reportes: n, gravedad: gravedadVolumen(n, 2, 6),
+      gravedad_texto: `${lista.length} comentario(s) + ${n - lista.length} "mismo problema"` + (ciudad ? ` en ${ciudad}` : ` (sin ciudad ubicada: ${[...new Set(lista.map((c) => c.ciudad || "no indicada"))].join(", ")})`) + `; el más reciente hace ${horas} h`,
       url_fuente: url, ventana, raw: { comentarios: lista.slice(0, 5).map((c) => ({ texto: c.texto, creado: c.creado, mismo: c.mismo })) },
     };
-    filas.push({ ...base, hash_dedup: await hash(["geoblackout", cc, empresa, sinTildes(ciudad), ventana]) });
+    filas.push({ ...base, hash_dedup: await hash(["geoblackout", cc, empresa, ciudad ? sinTildes(ciudad) : `(pais)${sinTildes(lista[0].ciudad)}`, "comentarios", ventana]) });
   }
   return filas;
 }
@@ -1179,9 +1188,14 @@ async function filasGeoblackoutSA(): Promise<Fila[]> {
       const html = await r.text();
       if (!r.ok || /cf-chl|challenge-platform/i.test(html.slice(0, 20000))) { errores.push(`${cc} ${r.status}`); continue; }
       filas.push(...await parsearPaisGB(html, cc, url));
-      const cupo = { n: 4 }; // ciudades nuevas a ubicar por país y corrida
-      filas.push(...await filasComentariosGB(comentariosGB(html, cc), cc, url, (ciudad) => ubicarCiudad(cc, ciudad, cupo)));
-    } catch (e) { errores.push(`${cc} ${e instanceof Error ? e.message : e}`); }
+      const cupo = { n: 6 }; // ciudades nuevas a ubicar por país y corrida
+      const coms = comentariosGB(html, cc);
+      diagSA[cc] = { comentarios: coms.length };
+      filas.push(...await filasComentariosGB(coms, cc, url, (ciudad) => ubicarCiudad(cc, ciudad, cupo).catch((e) => {
+        diagSA[cc].error_ubicar = String(e instanceof Error ? e.message : e).slice(0, 120);
+        return null;
+      })));
+    } catch (e) { errores.push(`${cc} ${e instanceof Error ? e.message : e}`); diagSA[cc] = { ...(diagSA[cc] ?? {}), error: String(e).slice(0, 120) }; }
   }
   if (!filas.length && errores.length) throw new Error(`Geoblackout SA: ${errores.join("; ")}`);
   return filas;
@@ -1283,6 +1297,7 @@ async function corrida(): Promise<Record<string, unknown>> {
     else res[nombre] = `error: ${r.reason instanceof Error ? r.reason.message : r.reason}`;
   });
   res.sec = sec;
+  res.gb_sa = diagSA;
   if (!filas.length) return { ...res, insertadas: 0, nota: "sin datos nuevos" };
   const nuevas = await rest("reportes_caidas?on_conflict=hash_dedup", {
     method: "POST",
