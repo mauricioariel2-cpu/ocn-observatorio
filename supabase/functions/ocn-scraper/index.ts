@@ -8,6 +8,8 @@
 //  · IODA (Georgia Tech, api.ioda.inetintel.cc.gatech.edu): mediciones objetivas de
 //    la red (BGP, ping a /24, telescopio). No son reportes de usuarios: detecta caídas
 //    por operador (sistema autónomo), por región y del país completo.
+//  · RIPE Atlas (RIPE NCC, API pública /api/v2/probes): sondas físicas en Chile; si varias
+//    sondas de un mismo operador se desconectan en las últimas 3 h, es señal de corte.
 //  · Blackout Map (blackoutmap.net, robots: Allow /, Crawl-delay 1; datos CC BY-NC 4.0,
 //    citar "Blackout Map"): sus propios puntos de prueba DENTRO de la red de cada operador
 //    chileno (ping cada 5 min) y reportes de usuarios de la última hora. Regiones de
@@ -22,6 +24,8 @@ const FUENTE_URL = "https://geoblackout.com/cl/report/internet";
 const FALLACL_URL = "https://fallacl.cl";
 const IODA_API = "https://api.ioda.inetintel.cc.gatech.edu/v2";
 const IODA_VENTANA_H = 3;
+const ATLAS_API = "https://atlas.ripe.net/api/v2";
+const ATLAS_CAIDA_H = 3; // una sonda que se desconectó hace menos de esto cuenta como caída reciente
 const BLACKOUT_URL = "https://blackoutmap.net";
 const VENTANA_HORAS = 3;
 const MIN_ENTRE_CORRIDAS_MIN = 10; // freno anti-abuso: no scrapea más seguido que esto
@@ -425,6 +429,73 @@ export async function filasRegionesBM(status: { regions?: { cc: string; region: 
   return filas;
 }
 
+// ── RIPE Atlas (RIPE NCC): sondas físicas instaladas en casas y oficinas de Chile ──
+// Datos públicos y gratuitos. Una sonda que pasó a "Disconnected" hace poco es una señal
+// de corte en esa red; una sola puede ser alguien que la desenchufó, por eso se exigen varias.
+type SondaAtlas = { id: number; asn_v4: number | null; status?: { name?: string }; status_since?: number; geometry?: { coordinates?: [number, number] } };
+
+function regionMasCercana(lat: number, lon: number): [string, number, number] | null {
+  let mejor: [string, number, number] | null = null, d0 = Infinity;
+  for (const r of new Set(Object.values(REGIONES))) {
+    const d = (r[1] - lat) ** 2 + ((r[2] - lon) * Math.cos((lat * Math.PI) / 180)) ** 2;
+    if (d < d0) { d0 = d; mejor = r; }
+  }
+  return mejor;
+}
+
+export async function parsearAtlas(sondas: SondaAtlas[], ahora = new Date()): Promise<Fila[]> {
+  const t = ahora.getTime() / 1000;
+  const ventana = ventana15(ahora);
+  const porEmpresa = new Map<string, { conectadas: number; caidas: SondaAtlas[] }>();
+  for (const s of sondas) {
+    const empresa = s.asn_v4 != null ? ASN_EMPRESA[String(s.asn_v4)] : undefined;
+    if (!empresa) continue;
+    const estado = s.status?.name;
+    const reciente = s.status_since != null && t - s.status_since < ATLAS_CAIDA_H * 3600;
+    if (estado !== "Connected" && !(estado === "Disconnected" && reciente)) continue; // abandonadas o caídas antiguas no cuentan
+    const e = porEmpresa.get(empresa) ?? { conectadas: 0, caidas: [] };
+    if (estado === "Connected") e.conectadas++; else e.caidas.push(s);
+    porEmpresa.set(empresa, e);
+  }
+  const filas: Fila[] = [];
+  for (const [empresa, e] of porEmpresa) {
+    const total = e.conectadas + e.caidas.length;
+    const n = e.caidas.length;
+    const gravedad = n >= 3 && n / total >= 0.25 ? "falla_masiva" : n >= 2 ? "posibles_problemas" : "normal";
+    const regiones = new Map<string, { reg: [string, number, number]; n: number }>();
+    for (const s of e.caidas) {
+      const c = s.geometry?.coordinates;
+      const reg = c ? regionMasCercana(c[1], c[0]) : null;
+      if (reg) regiones.set(reg[0], { reg, n: (regiones.get(reg[0])?.n ?? 0) + 1 });
+    }
+    const dondeTxt = regiones.size ? ` (${[...regiones.values()].map((r) => `${r.reg[0]} ${r.n}`).join(", ")})` : "";
+    const base = {
+      fuente: "atlas", pais: "CL", empresa, servicio: "internet", comuna: null, region: null,
+      latitud: CENTRO_PAIS[0], longitud: CENTRO_PAIS[1], precision_geo: "pais", cantidad_reportes: null, gravedad,
+      gravedad_texto: `${n} de ${total} sondas RIPE Atlas en la red de ${empresa} se desconectaron en las últimas ${ATLAS_CAIDA_H} h${dondeTxt}`,
+      url_fuente: "https://atlas.ripe.net/probes/?country_code=CL", ventana, raw: { conectadas: e.conectadas, caidas: n, total, ids: e.caidas.map((s) => s.id) },
+    };
+    filas.push({ ...base, hash_dedup: await hash(["atlas", empresa, ventana]) });
+    // Por región, solo si en esa región cayeron 2 o más sondas de la misma empresa.
+    for (const { reg, n: nr } of regiones.values()) {
+      if (nr < 2) continue;
+      const fr = {
+        ...base, region: reg[0], latitud: reg[1], longitud: reg[2], precision_geo: "region",
+        gravedad: gravedad === "normal" ? "posibles_problemas" : gravedad,
+        gravedad_texto: `${nr} sondas RIPE Atlas de ${empresa} se desconectaron en ${reg[0]} en las últimas ${ATLAS_CAIDA_H} h`,
+      };
+      filas.push({ ...fr, hash_dedup: await hash(["atlas", empresa, reg[0], ventana]) });
+    }
+  }
+  return filas;
+}
+
+async function filasAtlas(): Promise<Fila[]> {
+  const r = await fetch(`${ATLAS_API}/probes/?country_code=CL&page_size=500&fields=id,asn_v4,status,status_since,geometry`, { headers: cabeceras("application/json") });
+  if (!r.ok) throw new Error(`RIPE Atlas HTTP ${r.status}`);
+  return parsearAtlas((await r.json()).results ?? []);
+}
+
 async function rest(path: string, init: RequestInit = {}) {
   const url = Deno.env.get("SUPABASE_URL")!;
   const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -512,7 +583,7 @@ async function corrida(): Promise<Record<string, unknown>> {
   const res: Record<string, unknown> = {};
   const filas: Fila[] = [];
   // Cada fuente va por separado: si una falla, la otra igual se guarda.
-  for (const [nombre, fn] of [["geoblackout", filasGeoblackout], ["fallacl", filasFallacl], ["ioda", filasIoda], ["blackoutmap", filasBlackoutMap]] as const) {
+  for (const [nombre, fn] of [["geoblackout", filasGeoblackout], ["fallacl", filasFallacl], ["ioda", filasIoda], ["blackoutmap", filasBlackoutMap], ["atlas", filasAtlas]] as const) {
     try {
       const f = await fn();
       filas.push(...f);
