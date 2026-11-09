@@ -228,29 +228,50 @@ export function catalogoFallacl(html: string): Map<string, { nombre: string; cat
   return m;
 }
 
+type RegionesFallacl = Record<string, { region: string; count: string | number }[]>;
+
+// Por cada servicio con actividad: una fila nacional (reportes recientes, sirve para
+// el cruce de fuentes) y una fila por región con los reportes de HOY en esa región
+// (/api/reports/regions?service_id=...). Nada se reparte ni se estima: son sus conteos.
 export async function parsearFallacl(
   live: { data?: Record<string, { count?: number; last_region?: string; last_ciudad?: string; last_at?: string }> },
   catalogo = new Map<string, { nombre: string; cat: string }>(),
+  regiones: RegionesFallacl = {},
   ahora = new Date(),
 ): Promise<Fila[]> {
   const ventana = ventana15(ahora);
   const filas: Fila[] = [];
   for (const [id, d] of Object.entries(live?.data ?? {})) {
     const n = Number(d?.count ?? 0);
-    if (!(n > 0)) continue;
     const info = catalogo.get(id);
-    const reg = regionDe(d.last_region);
-    const base = {
-      fuente: "fallacl", pais: "CL", empresa: info?.nombre ?? id,
-      servicio: SERVICIO_FALLACL[info?.cat ?? ""] ?? info?.cat ?? "otro",
-      comuna: d.last_ciudad || null, region: reg ? reg[0] : (d.last_region || null),
-      latitud: reg ? reg[1] : CENTRO_PAIS[0], longitud: reg ? reg[2] : CENTRO_PAIS[1],
-      precision_geo: reg ? "region" : "pais",
-      cantidad_reportes: n, gravedad: gravedadVolumen(n, 2, 5),
-      gravedad_texto: reg ? `${n} reporte(s); el último desde ${reg[0]}` : `${n} reporte(s)`,
-      url_fuente: `${FALLACL_URL}/${id}`, ventana, raw: { id, ...d },
-    };
-    filas.push({ ...base, hash_dedup: await hash([base.fuente, "CL", id, ventana]) });
+    const empresa = info?.nombre ?? id;
+    const servicio = SERVICIO_FALLACL[info?.cat ?? ""] ?? info?.cat ?? "otro";
+    const activo = n > 0; // tuvo reportes recientes (ventana de su sitio)
+    if (activo) {
+      const base = {
+        fuente: "fallacl", pais: "CL", empresa, servicio, comuna: null, region: null,
+        latitud: CENTRO_PAIS[0], longitud: CENTRO_PAIS[1], precision_geo: "pais",
+        cantidad_reportes: n, gravedad: gravedadVolumen(n, 2, 5),
+        gravedad_texto: `${n} reporte(s) recientes en todo Chile`,
+        url_fuente: `${FALLACL_URL}/${id}`, ventana, raw: { id, ...d },
+      };
+      filas.push({ ...base, hash_dedup: await hash([base.fuente, "CL", id, "pais", ventana]) });
+    }
+    for (const r of regiones[id] ?? []) {
+      const reg = regionDe(r.region);
+      const c = Number(r.count);
+      if (!reg || !(c > 0)) continue;
+      const base = {
+        fuente: "fallacl", pais: "CL", empresa, servicio, comuna: null, region: reg[0],
+        latitud: reg[1], longitud: reg[2], precision_geo: "region",
+        cantidad_reportes: c,
+        // Solo cuenta como falla si el servicio sigue con reportes recientes.
+        gravedad: activo ? gravedadVolumen(c, 2, 5) : "normal",
+        gravedad_texto: `${c} reporte(s) hoy en la región ${reg[0]}`,
+        url_fuente: `${FALLACL_URL}/${id}`, ventana, raw: { id, region: r.region, count: c },
+      };
+      filas.push({ ...base, hash_dedup: await hash([base.fuente, "CL", id, reg[0], ventana]) });
+    }
   }
   return filas;
 }
@@ -415,6 +436,8 @@ async function rest(path: string, init: RequestInit = {}) {
   return r.status === 204 ? [] : r.json();
 }
 
+const pausa = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 function cabeceras(accept: string) {
   return {
     "User-Agent": `${USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)]} ${CONTACTO}`,
@@ -441,7 +464,15 @@ async function filasFallacl(): Promise<Fila[]> {
     const h = await fetch(FALLACL_URL, { headers: cabeceras("text/html") });
     if (h.ok) catalogo = catalogoFallacl(await h.text());
   } catch { /* sin nombres bonitos: se usa el id */ }
-  return parsearFallacl(live, catalogo);
+  const regiones: RegionesFallacl = {};
+  for (const id of Object.keys(live?.data ?? {})) {
+    try {
+      const rr = await fetch(`${FALLACL_URL}/api/reports/regions?service_id=${encodeURIComponent(id)}`, { headers: cabeceras("application/json") });
+      if (rr.ok) regiones[id] = (await rr.json()).regions ?? [];
+    } catch { /* esa región queda sin desglose */ }
+    await pausa(300);
+  }
+  return parsearFallacl(live, catalogo, regiones);
 }
 
 async function filasIoda(): Promise<Fila[]> {
@@ -458,8 +489,6 @@ async function filasIoda(): Promise<Fila[]> {
   }
   return parsearIoda(alertas);
 }
-
-const pausa = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 async function filasBlackoutMap(): Promise<Fila[]> {
   const filas: Fila[] = [];

@@ -115,7 +115,7 @@ export default function MapaCaidas({ comunas, paises, vista, nuevos, tri }) {
             <div className="popup">
               <strong>{p.titulo}</strong>
               {p.subtitulo && <span className="popup-sub">{p.subtitulo}</span>}
-              <div className="popup-total">{p.total ? `${p.total} reportes · últimas 3 h` : 'Caída medida en la red'}</div>
+              <div className="popup-total">{p.total ? `${p.total} reportes` : 'Caída medida en la red'}</div>
               <ul>
                 {p.detalle.map((e) => {
                   const v = verifDe(tri, e)
@@ -132,8 +132,7 @@ export default function MapaCaidas({ comunas, paises, vista, nuevos, tri }) {
                         {' '}Fuente: {e.url_fuente
                           ? <a href={e.url_fuente} target="_blank" rel="noreferrer">{FUENTE[e.fuente] ?? e.fuente}</a>
                           : (FUENTE[e.fuente] ?? e.fuente)} · {hace(e.capturado_en ?? e.ventana)}
-                        {(e.fuente === 'ioda' || e.fuente === 'blackoutmap') && <><br />{e.gravedad_texto}</>}
-                        {e.precision_geo === 'region' && e.fuente === 'fallacl' && ' · ubicación aproximada (región del último reporte)'}
+                        {e.gravedad_texto && <><br />{e.gravedad_texto}</>}
                       </small>
                     </li>
                   )

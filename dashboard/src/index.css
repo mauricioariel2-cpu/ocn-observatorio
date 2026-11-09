@@ -126,3 +126,9 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .lista li.sin-confirmar { border-color: var(--tenue); border-left-style: dashed; }
 .leyenda i.sin-confirmar { border: 2px dashed var(--tenue); background: none; margin-left: 8px; }
 .leyenda i.region-ok { background: var(--verde); margin-left: 8px; width: 10px; height: 10px; }
+/* Lugares con pocos reportes (sin falla declarada) */
+.burbuja.normal {
+  background: radial-gradient(circle at 35% 35%, rgba(170,180,200,.9), rgba(95,105,125,.85) 60%, rgba(55,62,78,.85));
+  border-color: rgba(255,255,255,.6); animation: none; opacity: .9;
+}
+.leyenda i.pocos { background: #6b7385; margin-left: 8px; }

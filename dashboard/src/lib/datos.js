@@ -44,7 +44,7 @@ export function mezclar(actuales, nuevas, horas = HORAS_VENTANA) {
 function ultimos(filas) {
   const vistos = new Map()
   for (const f of filas) {
-    const k = [f.fuente, paisDe(f), f.empresa, f.servicio, f.comuna].join('|')
+    const k = [f.fuente, paisDe(f), f.empresa, f.servicio, f.comuna, f.region, f.precision_geo].join('|')
     if (!vistos.has(k)) vistos.set(k, f)
   }
   return [...vistos.values()]
@@ -66,7 +66,8 @@ export function puntosComuna(filas) {
     p.detalle.push(f)
     porLugar.set(k, p)
   }
-  return [...porLugar.values()].filter((p) => p.gravedad !== 'normal').sort((a, b) => b.total - a.total)
+  // Se muestran los lugares con falla y también los que tienen reportes aunque sean pocos.
+  return [...porLugar.values()].filter((p) => p.gravedad !== 'normal' || p.total > 0).sort((a, b) => b.total - a.total)
 }
 
 // Agrupa las comunas por región (centro = promedio de sus comunas).
