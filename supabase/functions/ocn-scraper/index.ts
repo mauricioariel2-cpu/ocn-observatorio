@@ -39,6 +39,11 @@ const USER_AGENTS = [
 ];
 const CONTACTO = "OCN-Observatorio-Ciudadano/0.2";
 const TOKEN_POR_DEFECTO = "__OCN_TOKEN__";
+// Ninguna petición puede colgar la corrida: si una fuente no responde en 15 s, se corta y las demás siguen.
+const TIEMPO_MAX_MS = 15_000;
+const fetchGlobal = globalThis.fetch;
+const fetch = (url: string | URL | Request, init: RequestInit = {}) =>
+  fetchGlobal(url, { signal: AbortSignal.timeout(TIEMPO_MAX_MS), ...init });
 
 const OPERADORES = ["DIRECTV", "Movistar", "Entel", "VTR", "Claro", "WOM", "GTD", "Mundo", "Telsur", "Starlink"];
 const RE_OPERADOR = new RegExp(`\\b(${OPERADORES.join("|")})\\b`, "i");
@@ -949,19 +954,11 @@ async function filasIoda(): Promise<Fila[]> {
 }
 
 async function filasBlackoutMap(): Promise<Fila[]> {
-  const filas: Fila[] = [];
-  const estados: string[] = []; // códigos HTTP, para saber por qué falla si falla
-  for (const slug of Object.keys(PROVEEDORES_BM)) {
-    const r = await fetch(`${BLACKOUT_URL}/providers/${slug}`, { headers: cabeceras("text/html") });
-    estados.push(`${slug}:${r.status}`);
-    if (r.ok) { const f = await filaProveedorBM(slug, await r.text()); if (f) filas.push(f); else estados.push(`${slug}:sin-formato`); }
-    else await r.body?.cancel();
-    await pausa(1100); // Crawl-delay: 1
-  }
+  // Desde 2026-11-09 las páginas /providers/ responden 403 a robots: lo respetamos y ya no las pedimos.
+  // Solo se usa /data/status.json (sigue abierto), que trae las caídas medidas por región.
   const st = await fetch(`${BLACKOUT_URL}/data/status.json`, { headers: cabeceras("application/json") });
-  estados.push(`status.json:${st.status}`);
-  if (st.ok) filas.push(...await filasRegionesBM(await st.json())); else await st.body?.cancel();
-  if (!filas.length) throw new Error(`Blackout Map sin datos (${estados.join(" ")})`);
+  if (!st.ok) { await st.body?.cancel(); throw new Error(`Blackout Map status.json HTTP ${st.status}`); }
+  const filas: Fila[] = await filasRegionesBM(await st.json());
   return filas;
 }
 
@@ -974,16 +971,18 @@ async function corrida(): Promise<Record<string, unknown>> {
   const res: Record<string, unknown> = {};
   const filas: Fila[] = [];
   // Cada fuente va por separado: si una falla, la otra igual se guarda.
-  for (const [nombre, fn] of [["geoblackout", filasGeoblackout], ["fallacl", filasFallacl], ["ioda", filasIoda], ["blackoutmap", filasBlackoutMap], ["atlas", filasAtlas]] as const) {
-    try {
-      const f = await fn();
-      filas.push(...f);
-      res[nombre] = f.length;
-    } catch (e) {
-      res[nombre] = `error: ${e instanceof Error ? e.message : e}`;
-    }
-  }
-  try { res.sec = await guardarSec(); } catch (e) { res.sec = `error: ${e instanceof Error ? e.message : e}`; }
+  // Las fuentes se piden en paralelo (son sitios distintos) y cada una tiene su propio tiempo máximo.
+  const fuentes = [["geoblackout", filasGeoblackout], ["fallacl", filasFallacl], ["ioda", filasIoda], ["blackoutmap", filasBlackoutMap], ["atlas", filasAtlas]] as const;
+  const [resultados, sec] = await Promise.all([
+    Promise.allSettled(fuentes.map(([, fn]) => fn())),
+    guardarSec().catch((e) => `error: ${e instanceof Error ? e.message : e}`),
+  ]);
+  resultados.forEach((r, i) => {
+    const nombre = fuentes[i][0];
+    if (r.status === "fulfilled") { filas.push(...r.value); res[nombre] = r.value.length; }
+    else res[nombre] = `error: ${r.reason instanceof Error ? r.reason.message : r.reason}`;
+  });
+  res.sec = sec;
   if (!filas.length) return { ...res, insertadas: 0, nota: "sin datos nuevos" };
   const nuevas = await rest("reportes_caidas?on_conflict=hash_dedup", {
     method: "POST",
