@@ -7,7 +7,7 @@ import { REGIONES_CL, VISTAS, nivelPorZoom } from '../lib/geo'
 
 const SERVICIO = { internet_fijo: 'Internet hogar', internet_movil: 'Internet móvil', tv: 'TV', internet: 'Internet', telefonia_fija: 'Telefonía', streaming: 'Streaming', banca: 'Banca' }
 const norm = (t) => String(t ?? '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
-const FUENTE = { geoblackout: 'Geoblackout', fallacl: 'FallaCL', ioda: 'IODA (Georgia Tech)', blackoutmap: 'Blackout Map', ocn: 'Vecinos en OCN', downdetector: 'Downdetector' }
+const FUENTE = { geoblackout: 'Geoblackout', fallacl: 'FallaCL', ioda: 'IODA (Georgia Tech)', blackoutmap: 'Blackout Map', atlas: 'RIPE Atlas', ocn: 'Vecinos en OCN', downdetector: 'Downdetector' }
 
 function hace(iso) {
   const min = Math.round((Date.now() - Date.parse(iso)) / 60000)
