@@ -6,7 +6,7 @@ import { puntosRegion, verifDe } from '../lib/datos'
 import { VISTAS, nivelPorZoom } from '../lib/geo'
 
 const SERVICIO = { internet_fijo: 'Internet hogar', internet_movil: 'Internet móvil', tv: 'TV', internet: 'Internet', telefonia_fija: 'Telefonía', streaming: 'Streaming', banca: 'Banca' }
-const FUENTE = { geoblackout: 'Geoblackout', fallacl: 'FallaCL', downdetector: 'Downdetector' }
+const FUENTE = { geoblackout: 'Geoblackout', fallacl: 'FallaCL', ioda: 'IODA (Georgia Tech)', downdetector: 'Downdetector' }
 
 function hace(iso) {
   const min = Math.round((Date.now() - Date.parse(iso)) / 60000)
@@ -23,7 +23,7 @@ function icono(p, nuevo, confirmado) {
   const clases = ['burbuja', p.gravedad, nuevo ? 'nuevo' : '', confirmado ? 'confirmado' : 'sin-confirmar'].join(' ')
   return L.divIcon({
     className: 'burbuja-wrap',
-    html: `<div class="${clases}" style="width:${d}px;height:${d}px;font-size:${Math.max(12, d / 3.2)}px"><span>${p.total}</span></div>`,
+    html: `<div class="${clases}" style="width:${d}px;height:${d}px;font-size:${Math.max(12, d / 3.2)}px"><span>${p.total || '!'}</span></div>`,
     iconSize: [d, d],
     iconAnchor: [d / 2, d / 2],
   })
@@ -61,7 +61,7 @@ export default function MapaCaidas({ comunas, paises, vista, nuevos, tri }) {
     () => Object.fromEntries(puntos.map((p) => [p.id, icono(
       p,
       p.detalle.some((f) => nuevos.has(f.id)),
-      p.detalle.some((f) => f.gravedad !== 'normal' && verifDe(tri, f).confirmado),
+      p.detalle.some((f) => f.gravedad !== 'normal' && (verifDe(tri, f).confirmado || f.fuente === 'ioda')),
     )])),
     [puntos, nuevos, tri],
   )
@@ -102,7 +102,7 @@ export default function MapaCaidas({ comunas, paises, vista, nuevos, tri }) {
             <div className="popup">
               <strong>{p.titulo}</strong>
               {p.subtitulo && <span className="popup-sub">{p.subtitulo}</span>}
-              <div className="popup-total">{p.total} reportes · últimas 3 h</div>
+              <div className="popup-total">{p.total ? `${p.total} reportes · últimas 3 h` : 'Caída medida en la red'}</div>
               <ul>
                 {p.detalle.map((e) => {
                   const v = verifDe(tri, e)
@@ -113,13 +113,14 @@ export default function MapaCaidas({ comunas, paises, vista, nuevos, tri }) {
                       <small className="origen">
                         {e.gravedad !== 'normal' && (
                           <span className={v.confirmado ? 'sello ok' : 'sello'}>
-                            {v.confirmado ? `✓ Confirmado por ${v.fuentes.size} fuentes` : 'Sin confirmar (1 fuente)'}
+                            {v.confirmado ? `✓ Confirmado por ${v.fuentes.size} de 3 fuentes` : e.empresa === 'Red completa' ? 'Medición de red' : 'Sin confirmar (1 de 3 fuentes)'}
                           </span>
                         )}
                         {' '}Fuente: {e.url_fuente
                           ? <a href={e.url_fuente} target="_blank" rel="noreferrer">{FUENTE[e.fuente] ?? e.fuente}</a>
                           : (FUENTE[e.fuente] ?? e.fuente)} · {hace(e.capturado_en ?? e.ventana)}
-                        {e.precision_geo === 'region' && ' · ubicación aproximada (región del último reporte)'}
+                        {e.fuente === 'ioda' && <><br />{e.gravedad_texto}</>}
+                        {e.precision_geo === 'region' && e.fuente === 'fallacl' && ' · ubicación aproximada (región del último reporte)'}
                       </small>
                     </li>
                   )

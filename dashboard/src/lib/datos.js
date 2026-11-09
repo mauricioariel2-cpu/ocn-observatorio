@@ -124,6 +124,7 @@ export function estadoNacional(filas, pais = 'CL') {
 // Con una sola fuente se muestra como "sin confirmar". Nunca se inventan datos:
 // todo lo que se ve sale de filas reales de reportes_caidas, con su enlace de origen.
 export const MIN_FUENTES = 2
+export const FUENTES_TOTALES = 3 // Geoblackout, FallaCL, IODA
 const VENTANA_CRUCE_MIN = 60
 
 export function claveEmpresa(nombre) {
@@ -137,6 +138,7 @@ export function triangular(filas, ahora = Date.now()) {
   const porEmpresa = new Map()
   for (const f of filas) {
     if (f.gravedad === 'normal' || !f.gravedad) continue
+    if (f.empresa === 'Red completa') continue // medición de toda la red, no de una empresa
     const t = Date.parse(f.capturado_en ?? f.ventana)
     if (Number.isFinite(t) && t < limite) continue
     const k = `${paisDe(f)}|${claveEmpresa(f.empresa)}`

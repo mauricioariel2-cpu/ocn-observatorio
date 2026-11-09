@@ -5,6 +5,9 @@
 //  · Geoblackout Chile (robots.txt: Allow /, Crawl-delay 1): reportes por comuna.
 //  · FallaCL (robots.txt: Allow /): API JSON pública que usa su propia web,
 //    /api/reports/live, con reportes por servicio y la región del último reporte.
+//  · IODA (Georgia Tech, api.ioda.inetintel.cc.gatech.edu): mediciones objetivas de
+//    la red (BGP, ping a /24, telescopio). No son reportes de usuarios: detecta caídas
+//    por operador (sistema autónomo), por región y del país completo.
 // Downdetector no se incluye: su robots.txt prohíbe la página de DIRECTV.
 //
 // Variables que Supabase ya pone solas en toda función: SUPABASE_URL y
@@ -13,6 +16,8 @@
 
 const FUENTE_URL = "https://geoblackout.com/cl/report/internet";
 const FALLACL_URL = "https://fallacl.cl";
+const IODA_API = "https://api.ioda.inetintel.cc.gatech.edu/v2";
+const IODA_VENTANA_H = 3;
 const VENTANA_HORAS = 3;
 const MIN_ENTRE_CORRIDAS_MIN = 10; // freno anti-abuso: no scrapea más seguido que esto
 
@@ -80,6 +85,8 @@ const REGIONES: Record<string, [string, number, number]> = {
   "los rios": ["Los Ríos", -39.8142, -73.2459],
   "los lagos": ["Los Lagos", -41.4689, -72.9411],
   "aysen": ["Aysén", -45.5712, -72.0685],
+  "aisen": ["Aysén", -45.5712, -72.0685],
+  "higgins": ["O'Higgins", -34.1708, -70.7444],
   "magallanes": ["Magallanes", -53.1638, -70.9171],
 };
 const CENTRO_PAIS: [number, number] = [-33.4489, -70.6693];
@@ -224,7 +231,7 @@ export async function parsearFallacl(
     const n = Number(d?.count ?? 0);
     if (!(n > 0)) continue;
     const info = catalogo.get(id);
-    const reg = d.last_region ? REGIONES[sinTildes(d.last_region).replace(/^region (de |del )?/, "")] : undefined;
+    const reg = regionDe(d.last_region);
     const base = {
       fuente: "fallacl", pais: "CL", empresa: info?.nombre ?? id,
       servicio: SERVICIO_FALLACL[info?.cat ?? ""] ?? info?.cat ?? "otro",
@@ -236,6 +243,97 @@ export async function parsearFallacl(
       url_fuente: `${FALLACL_URL}/${id}`, ventana, raw: { id, ...d },
     };
     filas.push({ ...base, hash_dedup: await hash([base.fuente, "CL", id, ventana]) });
+  }
+  return filas;
+}
+
+// ---------- IODA ----------
+// Sistemas autónomos (ASN) de cada operador, verificados el 2026-11-09 contra
+// /v2/entities/query?entityType=asn&relatedTo=country/CL (campo "org").
+const ASN_EMPRESA: Record<string, string> = {
+  "7418": "Movistar", "27680": "Movistar", "7004": "Movistar", "52489": "Movistar",
+  "22047": "VTR",
+  "27651": "Entel", "27925": "Entel", "6471": "Entel",
+  "27995": "Claro",
+  "14259": "GTD",
+  "14117": "Telsur",
+  "52341": "WOM",
+  "273019": "DIRECTV",
+};
+const NIVEL_IODA: Record<string, string> = { critical: "falla_masiva", warning: "posibles_problemas" };
+const FUENTE_IODA: Record<string, string> = {
+  "bgp": "rutas BGP", "ping-slash24": "ping a redes /24", "merit-nt": "telescopio de red", "gtr": "tráfico a Google",
+};
+
+type AlertaIoda = {
+  level: string; time: number; datasource: string; value: number; historyValue: number; condition?: string;
+  entity: { code: string; type: string; name: string; attrs?: Record<string, string> };
+};
+
+export function regionDe(nombre?: string | null) {
+  if (!nombre) return undefined;
+  const n = sinTildes(nombre).replace(/^region (de |del )?/, "");
+  if (REGIONES[n]) return REGIONES[n];
+  const clave = Object.keys(REGIONES).sort((a, b) => b.length - a.length).find((k) => n.includes(k));
+  return clave ? REGIONES[clave] : undefined;
+}
+
+// Por entidad, la alerta más reciente. Si es "normal", la caída ya terminó.
+function vigentes(alertas: AlertaIoda[]) {
+  const ult = new Map<string, AlertaIoda>();
+  for (const a of alertas) {
+    const k = `${a.entity.type}|${a.entity.code}|${a.datasource}`;
+    if (!ult.has(k) || ult.get(k)!.time < a.time) ult.set(k, a);
+  }
+  return [...ult.values()].filter((a) => NIVEL_IODA[a.level]);
+}
+
+function textoIoda(a: AlertaIoda) {
+  const caida = a.historyValue > 0 ? Math.round((1 - a.value / a.historyValue) * 100) : null;
+  const hora = new Date(a.time * 1000).toISOString().slice(11, 16);
+  return `IODA ${a.level === "critical" ? "crítico" : "alerta"}: ${FUENTE_IODA[a.datasource] ?? a.datasource}` +
+    (caida != null && caida > 0 ? ` ${caida}% bajo lo normal` : "") + ` (${a.value} vs ${a.historyValue}) desde ${hora} UTC`;
+}
+
+export async function parsearIoda(alertas: AlertaIoda[], ahora = new Date()): Promise<Fila[]> {
+  const ventana = ventana15(ahora);
+  const peor = (x: string, y: string) => (x === "falla_masiva" || y === "falla_masiva" ? "falla_masiva" : "posibles_problemas");
+  const porEmpresa = new Map<string, { gravedad: string; alertas: AlertaIoda[] }>();
+  const filas: Fila[] = [];
+  for (const a of vigentes(alertas)) {
+    const g = NIVEL_IODA[a.level];
+    if (a.entity.type === "asn") {
+      const empresa = ASN_EMPRESA[a.entity.code];
+      if (!empresa) continue; // solo operadores que seguimos
+      const e = porEmpresa.get(empresa) ?? { gravedad: g, alertas: [] };
+      e.gravedad = peor(e.gravedad, g);
+      e.alertas.push(a);
+      porEmpresa.set(empresa, e);
+    } else if (a.entity.type === "region" || a.entity.type === "country") {
+      const reg = a.entity.type === "region" ? regionDe(a.entity.name) : undefined;
+      if (a.entity.type === "region" && !reg) continue;
+      const base = {
+        fuente: "ioda", pais: "CL", empresa: "Red completa", servicio: "internet",
+        comuna: null, region: reg ? reg[0] : null,
+        latitud: reg ? reg[1] : CENTRO_PAIS[0], longitud: reg ? reg[2] : CENTRO_PAIS[1],
+        precision_geo: reg ? "region" : "pais", cantidad_reportes: null, gravedad: g,
+        gravedad_texto: textoIoda(a), url_fuente: `https://ioda.inetintel.cc.gatech.edu/${a.entity.type}/${a.entity.code}`,
+        ventana, raw: a,
+      };
+      filas.push({ ...base, hash_dedup: await hash(["ioda", a.entity.type, a.entity.code, a.datasource, ventana]) });
+    }
+  }
+  for (const [empresa, e] of porEmpresa) {
+    const a = e.alertas.sort((x, y) => y.time - x.time)[0];
+    const base = {
+      fuente: "ioda", pais: "CL", empresa, servicio: "internet", comuna: null, region: null,
+      latitud: CENTRO_PAIS[0], longitud: CENTRO_PAIS[1], precision_geo: "pais",
+      cantidad_reportes: null, gravedad: e.gravedad,
+      gravedad_texto: `${textoIoda(a)} · AS${e.alertas.map((x) => x.entity.code).join(", AS")}`,
+      url_fuente: `https://ioda.inetintel.cc.gatech.edu/asn/${a.entity.code}`,
+      ventana, raw: { alertas: e.alertas },
+    };
+    filas.push({ ...base, hash_dedup: await hash(["ioda", "asn", empresa, ventana]) });
   }
   return filas;
 }
@@ -280,6 +378,21 @@ async function filasFallacl(): Promise<Fila[]> {
   return parsearFallacl(live, catalogo);
 }
 
+async function filasIoda(): Promise<Fila[]> {
+  const hasta = Math.floor(Date.now() / 1000);
+  const desde = hasta - IODA_VENTANA_H * 3600;
+  const q = (extra: string) => `${IODA_API}/outages/alerts?from=${desde}&until=${hasta}&limit=2000&${extra}`;
+  const consultas = ["entityType=asn&relatedTo=country/CL", "entityType=region&relatedTo=country/CL", "entityType=country&entityCode=CL"];
+  const alertas: AlertaIoda[] = [];
+  for (const c of consultas) {
+    const r = await fetch(q(c), { headers: cabeceras("application/json") });
+    if (!r.ok) throw new Error(`IODA respondió ${r.status}`);
+    const j = await r.json();
+    alertas.push(...(j.data ?? []));
+  }
+  return parsearIoda(alertas);
+}
+
 async function corrida(): Promise<Record<string, unknown>> {
   // Freno: si hubo una captura hace menos de 10 min, no volvemos a pedir las páginas.
   const ult = await rest("reportes_caidas?select=capturado_en&order=capturado_en.desc&limit=1");
@@ -289,7 +402,7 @@ async function corrida(): Promise<Record<string, unknown>> {
   const res: Record<string, unknown> = {};
   const filas: Fila[] = [];
   // Cada fuente va por separado: si una falla, la otra igual se guarda.
-  for (const [nombre, fn] of [["geoblackout", filasGeoblackout], ["fallacl", filasFallacl]] as const) {
+  for (const [nombre, fn] of [["geoblackout", filasGeoblackout], ["fallacl", filasFallacl], ["ioda", filasIoda]] as const) {
     try {
       const f = await fn();
       filas.push(...f);

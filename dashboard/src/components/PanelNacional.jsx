@@ -1,6 +1,6 @@
 const ETIQUETA = { falla_masiva: 'Falla masiva', posibles_problemas: 'Posibles problemas', normal: 'Normal' }
 
-const FUENTE = { geoblackout: 'Geoblackout', fallacl: 'FallaCL', downdetector: 'Downdetector' }
+const FUENTE = { geoblackout: 'Geoblackout', fallacl: 'FallaCL', ioda: 'IODA', downdetector: 'Downdetector' }
 const nombres = (set) => [...set].map((f) => FUENTE[f] ?? f).join(' + ')
 
 export default function PanelNacional({ comunas, paises, nacional, tri, actualizado, error, abierto, alternar }) {
@@ -23,11 +23,11 @@ export default function PanelNacional({ comunas, paises, nacional, tri, actualiz
           {verif.map((e) => (
             <li key={e.empresa} className={e.confirmado ? 'falla_masiva' : 'sin-confirmar'}>
               <span>{e.empresa}<small>{e.confirmado ? '✓ Confirmada' : 'Sin confirmar'} · {nombres(e.fuentes)}</small></span>
-              <b>{e.fuentes.size}/{2}</b>
+              <b>{e.fuentes.size}/3</b>
             </li>
           ))}
         </ul>
-        <p className="pie">Una falla se marca como confirmada solo si al menos 2 fuentes independientes la reportan en la última hora.</p>
+        <p className="pie">Una falla se marca como confirmada solo si al menos 2 de 3 fuentes independientes la reportan en la última hora: reportes ciudadanos (Geoblackout, FallaCL) y mediciones de red (IODA).</p>
 
         <h2>Zonas afectadas en Chile</h2>
         {comunas.filter((c) => c.pais === 'CL').length === 0 && (
@@ -68,7 +68,7 @@ export default function PanelNacional({ comunas, paises, nacional, tri, actualiz
           <i className="falla_masiva" /> Falla masiva <i className="posibles_problemas" /> Posibles problemas <i className="sin-confirmar" /> Sin confirmar
         </p>
         <p className="pie">
-          Actualizado {actualizado ? actualizado.toLocaleTimeString('es-CL') : '…'} · Fuentes: reportes ciudadanos de Geoblackout y FallaCL
+          Actualizado {actualizado ? actualizado.toLocaleTimeString('es-CL') : '…'} · Fuentes: Geoblackout, FallaCL e IODA (Georgia Tech, datos © Georgia Tech Research Corporation)
         </p>
       </div>
     </aside>

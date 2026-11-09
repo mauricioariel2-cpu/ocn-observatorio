@@ -1,0 +1,8 @@
+[
+ {"condition":"< 0.8","datasource":"ping-slash24","entity":{"code":"22047","name":"AS22047 ()","type":"asn","attrs":{"org":"VTR BANDA ANCHA S.A."}},"historyValue":3420,"level":"critical","method":"median","time":1794180000,"value":862},
+ {"condition":"normal","datasource":"bgp","entity":{"code":"7418","name":"AS7418 ()","type":"asn"},"historyValue":500,"level":"warning","method":"median","time":1794170000,"value":450},
+ {"condition":"normal","datasource":"bgp","entity":{"code":"7418","name":"AS7418 ()","type":"asn"},"historyValue":500,"level":"normal","method":"median","time":1794180000,"value":500},
+ {"condition":"< 0.99","datasource":"bgp","entity":{"code":"618","name":"Coquimbo","type":"region"},"historyValue":1383,"level":"critical","method":"median","time":1794181000,"value":1348},
+ {"condition":"< 0.99","datasource":"bgp","entity":{"code":"612","name":"Aisén del General Carlos Ibáñez del Campo","type":"region"},"historyValue":100,"level":"warning","method":"median","time":1794181000,"value":95},
+ {"condition":"< 0.8","datasource":"bgp","entity":{"code":"54113","name":"AS54113 (FASTLY)","type":"asn"},"historyValue":1466,"level":"critical","method":"median","time":1794181000,"value":10}
+]
