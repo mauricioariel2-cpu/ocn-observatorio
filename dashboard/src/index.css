@@ -189,3 +189,78 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .unico { background: var(--panel-2); border-left: 4px solid var(--naranjo); border-radius: 10px; padding: 10px 12px; display: grid; gap: 4px; font-size: 14px; line-height: 1.35; }
 .unico-otras { color: var(--tenue); font-size: 12px; }
 @media (max-width: 760px) { .rapido { bottom: 80px; left: 12px; } }
+
+/* Asistente OCN */
+.asis {
+  position: absolute; left: 14px; top: 14px; z-index: 960; width: min(380px, calc(100% - 28px));
+  max-height: calc(100% - 28px); overflow-y: auto;
+  background: linear-gradient(160deg, rgba(24,30,44,.97), rgba(14,17,25,.97));
+  border: 1px solid rgba(90,200,250,.25); border-radius: 18px;
+  box-shadow: 0 0 0 1px rgba(0,0,0,.4), 0 18px 40px rgba(0,0,0,.55), 0 0 40px rgba(90,200,250,.08);
+  backdrop-filter: blur(8px); animation: asis-entra .35s ease-out;
+}
+@keyframes asis-entra { from { opacity: 0; transform: translateY(-8px) scale(.98); } }
+.asis-cab { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-bottom: 1px solid var(--borde); }
+.asis-cab div { flex: 1; display: grid; }
+.asis-cab small { color: var(--tenue); font-size: 12px; }
+.asis-min { background: var(--panel-2); border: 1px solid var(--borde); border-radius: 8px; width: 30px; height: 30px; }
+.asis-ojo {
+  width: 26px; height: 26px; border-radius: 50%; flex: none; position: relative; display: inline-block;
+  background: radial-gradient(circle, #5ac8fa 0 22%, rgba(90,200,250,.25) 23% 60%, transparent 61%);
+  box-shadow: 0 0 12px rgba(90,200,250,.6);
+}
+.asis-ojo.buscando::after {
+  content: ''; position: absolute; inset: -4px; border-radius: 50%;
+  border: 2px solid transparent; border-top-color: #5ac8fa; animation: gira 1s linear infinite;
+}
+@keyframes gira { to { transform: rotate(360deg); } }
+.asis-cuerpo { padding: 12px 14px 14px; display: grid; gap: 10px; }
+.asis-pasos { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; font-size: 13px; color: var(--tenue); }
+.asis-pasos li { display: flex; align-items: center; gap: 8px; transition: color .3s; }
+.asis-pasos li i { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--borde); flex: none; }
+.asis-pasos li.activo { color: var(--texto); }
+.asis-pasos li.activo i { border-color: #5ac8fa; border-top-color: transparent; animation: gira .8s linear infinite; }
+.asis-pasos li.hecho { color: var(--texto); }
+.asis-pasos li.hecho i { background: var(--verde); border-color: var(--verde); box-shadow: 0 0 6px var(--verde); }
+.asis-pasos em { margin-left: auto; font-style: normal; color: #5ac8fa; font-weight: 700; font-size: 12px; text-align: right; }
+.asis-campo { display: grid; gap: 6px; font-size: 13px; font-weight: 700; }
+.detectada { color: var(--verde); font-weight: 700; margin-left: 6px; }
+.pista { color: var(--naranjo); font-weight: 400; }
+.chips.mini { display: flex; flex-wrap: wrap; gap: 6px; border: 0; padding: 0; margin: 0; }
+.chips.mini button { padding: 6px 10px; font-size: 13px; border-radius: 999px; background: var(--panel-2); border: 1px solid var(--borde); }
+.chips.mini button.activo { background: #5ac8fa; border-color: #5ac8fa; color: #062030; font-weight: 800; }
+.asis-fila { display: flex; gap: 6px; }
+.asis-fila select, .asis-fila input { flex: 1; min-width: 0; background: var(--panel-2); color: var(--texto); border: 1px solid var(--borde); border-radius: 10px; padding: 9px 10px; font: inherit; font-size: 14px; }
+.btn-ubic { background: var(--panel-2); border: 1px solid var(--borde); border-radius: 10px; width: 42px; flex: none; }
+.asis-botones { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+.asis-botones button { border: 0; border-radius: 12px; padding: 14px 6px; font-weight: 800; font-size: 14px; line-height: 1.15; transition: transform .1s; }
+.asis-botones button:active { transform: scale(.96); }
+.asis-botones button:disabled { opacity: .6; }
+.b-caido { background: var(--rojo); color: #fff; box-shadow: 0 6px 18px rgba(229,37,42,.35); }
+.b-lento { background: var(--naranjo); color: #1a1400; }
+.b-ok { background: var(--panel-2); color: var(--verde); border: 1px solid #2a4a34 !important; }
+.asis-hecho { font-size: 18px; font-weight: 800; margin: 0; }
+.asis-hecho.ok { color: var(--verde); }
+.asis .nota { margin: 0; font-size: 11px; color: var(--tenue); }
+.asis-pildora {
+  position: absolute; left: 14px; top: 14px; z-index: 960; display: flex; align-items: center; gap: 8px;
+  background: rgba(20,24,33,.95); border: 1px solid rgba(90,200,250,.35); border-radius: 999px;
+  padding: 8px 14px 8px 8px; font-weight: 700; box-shadow: 0 8px 22px rgba(0,0,0,.45);
+}
+.asis-pildora .asis-ojo { width: 22px; height: 22px; }
+@media (max-width: 760px) {
+  .asis { top: auto; bottom: 80px; left: 10px; width: calc(100% - 20px); max-height: 64dvh; }
+  .asis-pildora { top: auto; bottom: 84px; left: 12px; }
+}
+.asis { overflow-x: hidden; }
+.asis-pasos li { flex-wrap: wrap; }
+.asis-pasos em { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+.asis-botones { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.asis-fila select { flex: 1.3 1 0; } .asis-fila input { flex: 1 1 0; }
+@media (max-width: 760px) {
+  .asis-cuerpo { gap: 8px; padding: 10px 12px 12px; }
+  .chips.mini button { padding: 5px 9px; font-size: 12px; }
+  .asis-pasos { font-size: 12px; }
+}
+.asis-cuerpo { grid-template-columns: minmax(0, 1fr); }
+.asis, .asis-pildora { z-index: 1001; }

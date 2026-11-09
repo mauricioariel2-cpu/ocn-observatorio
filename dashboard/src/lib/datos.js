@@ -159,7 +159,7 @@ export function verifDe(tri, f) {
 export async function cargarVecinos(horas = HORAS_VENTANA) {
   const { data, error } = await supabase
     .from('reportes_usuarios')
-    .select('id, creado_en, empresa, servicio, region, comuna, latitud, longitud')
+    .select('id, creado_en, empresa, servicio, region, comuna, latitud, longitud, tipo, empresa_detectada')
     .gte('creado_en', desdeISO(horas))
     .order('creado_en', { ascending: false })
     .limit(5000)
@@ -180,6 +180,7 @@ export function resumirVecinos(vecinos, centros) {
     const k = [v.empresa, v.servicio, v.region].join('|')
     const g = grupos.get(k) ?? { ...v, n: 0, comunas: new Set(), ultimo: v.creado_en }
     g.n += 1
+    if (v.tipo === 'lento') g.lentos = (g.lentos ?? 0) + 1
     if (v.comuna) g.comunas.add(v.comuna)
     if (v.creado_en > g.ultimo) g.ultimo = v.creado_en
     grupos.set(k, g)
@@ -191,6 +192,7 @@ export function resumirVecinos(vecinos, centros) {
       comuna: null, region: g.region, latitud: c?.[0] ?? null, longitud: c?.[1] ?? null, precision_geo: 'region',
       cantidad_reportes: g.n, gravedad: g.n >= 5 ? 'falla_masiva' : g.n >= 2 ? 'posibles_problemas' : 'normal',
       gravedad_texto: `${g.n} vecino(s) reportaron en OCN en las últimas ${HORAS_VENTANA} h` +
+        (g.lentos ? ` · ${g.n - g.lentos} sin servicio, ${g.lentos} lento` : '') +
         (g.comunas.size ? ` (${[...g.comunas].slice(0, 5).join(', ')})` : ''),
       ventana: g.ultimo, capturado_en: g.ultimo, url_fuente: null,
     }
