@@ -57,7 +57,7 @@ export default function ChatOCN({ contar }) {
     await bot('Hola 👋 Soy el asistente de OCN. Estoy revisando tu conexión…')
     red.current = await deteccion
     const r = red.current
-    if (r?.empresa) await bot(`Veo que te conectas por **${r.empresa}** (red AS${r.asn}). Tu conexión respondió en ${r.latenciaMs} ms.`)
+    if (r?.empresa) await bot(`Veo que te conectas por **${r.empresa}** (red AS${r.asn}).`)
     preguntaEstado()
   }
 
