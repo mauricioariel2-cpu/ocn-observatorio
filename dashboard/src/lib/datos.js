@@ -212,3 +212,16 @@ export function semaforoRegiones(comunas, regiones, tri) {
     return { nombre, gravedad, total: enRegion.reduce((s, c) => s + c.total, 0), principales, confirmado }
   }).sort((a, b) => ORDEN[b.gravedad] - ORDEN[a.gravedad] || b.total - a.total)
 }
+
+// "No eres el único": cuántos vecinos reportaron la misma compañía en la misma región
+// en la última hora, y cuántos reportes registran las otras fuentes ahí. Solo conteos reales.
+export function contarSimilares(vecinos, filas, empresa, region) {
+  const hace1h = Date.now() - 3600 * 1000
+  const r = sinTilde(region)
+  const k = claveEmpresa(empresa)
+  const enOcn = vecinos.filter((v) => v.empresa === empresa && sinTilde(v.region) === r && Date.parse(v.creado_en) > hace1h).length
+  const otras = ultimos(filas)
+    .filter((f) => f.fuente !== 'ocn' && sinTilde(f.region) === r && claveEmpresa(f.empresa) === k)
+    .reduce((s, f) => s + (f.cantidad_reportes ?? 0), 0)
+  return { enOcn, otras }
+}

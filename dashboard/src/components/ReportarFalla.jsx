@@ -1,19 +1,11 @@
 import { useEffect, useState } from 'react'
 import { enviarReporte } from '../lib/datos'
+import { dispositivo, guardarPerfil, leerPerfil } from '../lib/perfil'
+import NoEresElUnico from './NoEresElUnico'
 import { REGIONES_CL } from '../lib/geo'
 
 const EMPRESAS = ['Movistar', 'Entel', 'VTR', 'Claro', 'WOM', 'GTD', 'Mundo', 'Telsur', 'Starlink', 'DIRECTV', 'Otro']
 const SERVICIOS = [['internet_fijo', 'Internet hogar'], ['internet_movil', 'Internet móvil'], ['tv', 'TV'], ['telefonia', 'Telefonía']]
-
-function dispositivo() {
-  try {
-    let id = localStorage.getItem('ocn-dispositivo')
-    if (!id) { id = crypto.randomUUID(); localStorage.setItem('ocn-dispositivo', id) }
-    return id
-  } catch {
-    return crypto.randomUUID()
-  }
-}
 
 // Región más cercana a una coordenada (por la capital regional): solo sugiere, la persona confirma.
 function regionCercana(lat, lon) {
@@ -25,11 +17,12 @@ function regionCercana(lat, lon) {
   return mejor?.nombre
 }
 
-export default function ReportarFalla({ abierto, cerrar, regionInicial, alEnviar }) {
-  const [empresa, setEmpresa] = useState('')
-  const [servicio, setServicio] = useState('internet_fijo')
-  const [region, setRegion] = useState('')
-  const [comuna, setComuna] = useState('')
+export default function ReportarFalla({ abierto, cerrar, regionInicial, alEnviar, contar }) {
+  const recordado = leerPerfil()
+  const [empresa, setEmpresa] = useState(recordado?.empresa ?? '')
+  const [servicio, setServicio] = useState(recordado?.servicio ?? 'internet_fijo')
+  const [region, setRegion] = useState(recordado?.region ?? '')
+  const [comuna, setComuna] = useState(recordado?.comuna ?? '')
   const [coords, setCoords] = useState(null)
   const [estado, setEstado] = useState({ tipo: 'idle' })
 
@@ -64,11 +57,10 @@ export default function ReportarFalla({ abierto, cerrar, regionInicial, alEnviar
     if (!empresa || !region) return setEstado({ tipo: 'error', msg: 'Elige tu compañía y tu región.' })
     setEstado({ tipo: 'enviando' })
     try {
-      await enviarReporte({
-        empresa, servicio, region, comuna: comuna.trim() || null,
-        latitud: coords?.lat ?? null, longitud: coords?.lon ?? null, dispositivo: dispositivo(),
-      })
-      setEstado({ tipo: 'ok' })
+      const perfil = { empresa, servicio, region, comuna: comuna.trim() || null }
+      await enviarReporte({ ...perfil, latitud: coords?.lat ?? null, longitud: coords?.lon ?? null, dispositivo: dispositivo() })
+      guardarPerfil(perfil) // la próxima vez basta un toque
+      setEstado({ tipo: 'ok', ...(await contar(empresa, region)) })
       alEnviar?.()
     } catch (err) {
       setEstado({ tipo: 'error', msg: err.message })
@@ -81,7 +73,9 @@ export default function ReportarFalla({ abierto, cerrar, regionInicial, alEnviar
         <h2 id="titulo-reporte">¿Se te cayó el servicio?</h2>
         {estado.tipo === 'ok' ? (
           <>
-            <p className="ok-msg">Gracias. Tu reporte ya aparece en el mapa.</p>
+            <p className="ok-msg">✓ Gracias. Tu reporte ya aparece en el mapa.</p>
+            <NoEresElUnico empresa={empresa} region={region} enOcn={estado.enOcn} otras={estado.otras} />
+            <p className="nota">La próxima vez basta un toque: te preguntaremos si funciona tu {empresa}.</p>
             <button type="button" className="btn-primario" onClick={cerrar}>Volver al mapa</button>
           </>
         ) : (

@@ -2,8 +2,9 @@ import { useEffect, useMemo, useState } from 'react'
 import MapaCaidas from './components/MapaCaidas'
 import PanelNacional from './components/PanelNacional'
 import ReportarFalla from './components/ReportarFalla'
+import ReporteRapido from './components/ReporteRapido'
 import { REGIONES_CL } from './lib/geo'
-import { cargarReportes, cargarVecinos, escucharNuevos, estadoNacional, mezclar, puntosComuna, puntosPais, resumirVecinos, triangular } from './lib/datos'
+import { cargarReportes, cargarVecinos, contarSimilares, escucharNuevos, estadoNacional, mezclar, puntosComuna, puntosPais, resumirVecinos, triangular } from './lib/datos'
 
 const CENTROS = Object.fromEntries(REGIONES_CL.map(([n, la, lo]) => [n, [la, lo]]))
 
@@ -21,8 +22,16 @@ export default function App() {
   const [vecinos, setVecinos] = useState([])
   const [reporte, setReporte] = useState({ abierto: false, region: '' })
 
+  const [versionPerfil, setVersionPerfil] = useState(0)
+
   async function recargarVecinos() {
-    try { setVecinos(await cargarVecinos()) } catch { /* si la tabla aún no existe, el mapa sigue funcionando */ }
+    try { const v = await cargarVecinos(); setVecinos(v); return v } catch { return [] /* si la tabla aún no existe, el mapa sigue funcionando */ }
+  }
+
+  // Después de reportar: datos frescos para responder "no eres el único".
+  async function contar(empresa, region) {
+    const v = await recargarVecinos()
+    return contarSimilares(v, filas, empresa, region)
   }
 
   useEffect(() => {
@@ -100,10 +109,11 @@ export default function App() {
           abierto={panelAbierto}
           alternar={() => setPanelAbierto((a) => !a)}
         />
-        <button className="btn-reportar" onClick={() => setReporte({ abierto: true, region: '' })}>⚠ Reportar falla</button>
+        <ReporteRapido version={versionPerfil} contar={contar} abrirFormulario={() => setReporte({ abierto: true, region: '' })} />
       </main>
       <ReportarFalla abierto={reporte.abierto} regionInicial={reporte.region}
-        cerrar={() => setReporte({ abierto: false, region: '' })} alEnviar={recargarVecinos} />
+        contar={contar}
+        cerrar={() => { setReporte({ abierto: false, region: '' }); setVersionPerfil((n) => n + 1) }} />
     </div>
   )
 }
