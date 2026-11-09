@@ -883,14 +883,13 @@ async function secPost<T>(ruta: string, cuerpo: unknown): Promise<T> {
 
 // Guarda la última hora publicada por la SEC (si ya estaba, la base la ignora).
 async function guardarSec(): Promise<string | number> {
-  // La SEC solo responde desde Chile: si existe SEC_RELAY_URL (función en Google Cloud Santiago), se usa ese relevo.
-  const relevo = Deno.env.get("SEC_RELAY_URL");
+  // La SEC solo responde desde Chile: una función en Google Cloud Santiago (relay-sec/) deja los
+  // datos crudos en sec_crudo cada 15 minutos. Si hay una entrega reciente se usa; si no, se intenta directo.
   let ult: HoraSec | undefined, comunas: ComunaSec[];
+  const desde = new Date(Date.now() - 40 * 60_000).toISOString();
+  const [relevo] = await rest(`sec_crudo?select=ultima,comunas&recibido_en=gte.${encodeURIComponent(desde)}&order=recibido_en.desc&limit=1`) as { ultima: HoraSec; comunas: ComunaSec[] }[];
   if (relevo) {
-    const r = await fetch(relevo, { signal: AbortSignal.timeout(25_000) });
-    if (!r.ok) throw new Error(`relevo SEC HTTP ${r.status}`);
-    ({ ultima: ult, comunas } = await r.json() as { ultima?: HoraSec; comunas: ComunaSec[] });
-    if (!ult) throw new Error("SEC sin datos");
+    ({ ultima: ult, comunas } = relevo);
   } else {
     const serie = await secPost<HoraSec[]>("Get", {});
     ult = serie.at(-1);
