@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { cargarReclamos } from '../lib/reclamos'
 
 // Color fijo por empresa (sigue a la entidad, nunca al ranking). Paleta categórica
 // validada para fondo oscuro (CVD ΔE ≥ 9.4 entre vecinos). El resto va a "Otras" en gris.
@@ -23,6 +24,7 @@ export default function Estadisticas({ nacional, vecinos }) {
   const [serie, setSerie] = useState([])
   const [disp, setDisp] = useState([])
   const [regiones, setRegiones] = useState([])
+  const [reclamos, setReclamos] = useState([])
   const [error, setError] = useState(null)
   const [rango, setRango] = useState(24)
   const [tabla, setTabla] = useState(false)
@@ -31,6 +33,7 @@ export default function Estadisticas({ nacional, vecinos }) {
     let vivo = true
     async function cargar() {
       try {
+        cargarReclamos(30).then((x) => vivo && setReclamos(x)).catch(() => {})
         const [s, d, r] = await Promise.all([
           leer('ocn_serie_reportes', 'hora, empresa, reportes, fuentes', 'hora'),
           leer('ocn_disponibilidad', 'hora, empresa, pct, sondas', 'hora'),
@@ -101,6 +104,12 @@ export default function Estadisticas({ nacional, vecinos }) {
           <p className="fuente">Sondas de Blackout Map dentro de cada red (CC BY-NC 4.0). 100% = todos los puntos de prueba responden.</p>
         </section>
       </div>
+
+      <section className="tarjeta">
+        <header><h3>Reclamos formales armados en OCN · últimos 30 días</h3></header>
+        <RankingReclamos filas={reclamos} />
+        <p className="fuente">Cada persona suma un reclamo cuando confirma que lo envió a su compañía (máximo uno cada 6 horas por empresa). OCN no guarda nombres ni RUT.</p>
+      </section>
 
       <section className="tarjeta prediccion">
         <header><h3>Predicción de fallas</h3></header>
@@ -272,6 +281,25 @@ function Disponibilidad({ filas }) {
           </li>
         )
       })}
+    </ul>
+  )
+}
+
+function RankingReclamos({ filas }) {
+  if (!filas.length) return <p className="vacio">Todavía no hay reclamos registrados. El primero puede ser el tuyo: repórtalo en el chat y toca "Armar mi reclamo".</p>
+  const por = new Map()
+  for (const f of filas) por.set(f.empresa, (por.get(f.empresa) ?? 0) + 1)
+  const orden = [...por].sort((a, b) => b[1] - a[1])
+  const max = orden[0][1]
+  return (
+    <ul className="barras">
+      {orden.map(([empresa, n]) => (
+        <li key={empresa} title={`${empresa}: ${n} reclamos`}>
+          <span className="b-nombre">{empresa}</span>
+          <span className="b-pista"><i style={{ width: `${(n / max) * 100}%`, background: 'var(--rojo)' }} /></span>
+          <b>{n}</b>
+        </li>
+      ))}
     </ul>
   )
 }

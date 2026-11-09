@@ -3,6 +3,7 @@ import { enviarReporte } from '../lib/datos'
 import { REGIONES_CL } from '../lib/geo'
 import { detectarCompania } from '../lib/isp'
 import { dispositivo, guardarPerfil, leerPerfil } from '../lib/perfil'
+import { DERECHOS_SUBTEL, PORTAL_SUBTEL, cargarReclamos, registrarReclamo, textoReclamo } from '../lib/reclamos'
 
 const EMPRESAS = ['Movistar', 'Entel', 'VTR', 'Claro', 'WOM', 'GTD', 'Mundo', 'Telsur', 'Starlink', 'DIRECTV', 'Otro']
 const SERVICIOS = { internet_fijo: 'Internet de hogar', internet_movil: 'Internet móvil', tv: 'TV', telefonia: 'Teléfono' }
@@ -159,11 +160,42 @@ export default function ChatOCN({ contar }) {
         ...(otras > 0 ? [`Otros sitios de reportes registran además ${otras} reporte${otras === 1 ? '' : 's'} de ${d.empresa} en ${d.region}.`] : []),
         'Mientras más personas reporten, más fuerza tiene el reclamo ante la compañía y SUBTEL. Comparte OCN con tus vecinos 🙏',
       )
-      preguntar({ tipo: 'botones', items: [['Ver el mapa', () => setAbierto(false)], ['Compartir por WhatsApp', compartir]] })
+      preguntar({ tipo: 'botones', items: [['📝 Armar mi reclamo', armarReclamo], ['Compartir por WhatsApp', compartir], ['Ver el mapa', () => setAbierto(false)]] })
     } catch (e) {
       setEscribiendo(false)
       await bot(`No pude registrar el reporte: ${e.message}`)
       preguntar({ tipo: 'botones', items: [['Volver a empezar', preguntaEstado]] })
+    }
+  }
+
+  async function armarReclamo() {
+    const d = datos.current
+    await bot(
+      'Te armo el reclamo formal 📝 No te pido nombre ni RUT: esos datos los completas tú y no salen de tu celular.',
+      `Según SUBTEL, si el servicio se interrumpe más de 12 horas sin justificación puedes exigir una rebaja del cargo fijo, y si el corte dura más de 3 días seguidos, una compensación de 3 veces el cargo fijo diario por cada día. [Ver tus derechos en SUBTEL](${DERECHOS_SUBTEL})`,
+    )
+    setMsgs((m) => [...m, { de: 'bot', reclamo: textoReclamo(d) }])
+    await bot(
+      `**Paso 1:** envíalo a ${d.empresa} por su web, su app o su teléfono de atención, y anota el **número de reclamo** que te den.`,
+      `**Paso 2:** si ${d.empresa} no responde o no te soluciona, insiste en SUBTEL con ese número. [Abrir portal de reclamos SUBTEL](${PORTAL_SUBTEL})`,
+      'Cuando lo envíes, avísame y lo sumo al contador público de reclamos contra la empresa.',
+    )
+    preguntar({ tipo: 'botones', items: [[`✅ Ya lo envié a ${d.empresa}`, sumarReclamo], ['Lo envío después', () => bot('Perfecto. El texto queda aquí arriba para copiarlo cuando quieras.')]] })
+  }
+
+  async function sumarReclamo() {
+    const d = datos.current
+    setEscribiendo(true)
+    try {
+      await registrarReclamo({ ...d, dispositivo: dispositivo() })
+      const todos = await cargarReclamos(30)
+      setEscribiendo(false)
+      const n = todos.filter((r) => r.empresa === d.empresa).length
+      await bot(`💪 Sumado. En los últimos 30 días van **${n} reclamo${n === 1 ? '' : 's'}** contra ${d.empresa} registrados en OCN. Mientras más seamos, más difícil es ignorarnos.`)
+      preguntar({ tipo: 'botones', items: [['Compartir por WhatsApp', compartir], ['Ver el mapa', () => setAbierto(false)]] })
+    } catch (e) {
+      setEscribiendo(false)
+      await bot(`No pude sumarlo: ${e.message}`)
     }
   }
 
@@ -192,9 +224,9 @@ export default function ChatOCN({ contar }) {
         <button className="asis-min" onClick={() => setAbierto(false)} aria-label="Minimizar">▾</button>
       </header>
       <div className="chat-hilo" aria-live="polite">
-        {msgs.map((m, i) => (
-          <p key={i} className={`burb ${m.de}`} dangerouslySetInnerHTML={{ __html: negrita(m.t) }} />
-        ))}
+        {msgs.map((m, i) => m.reclamo
+          ? <TarjetaReclamo key={i} texto={m.reclamo} />
+          : <p key={i} className={`burb ${m.de}`} dangerouslySetInnerHTML={{ __html: negrita(m.t) }} />)}
         {escribiendo && <p className="burb bot puntos" aria-label="escribiendo"><i /><i /><i /></p>}
         {opciones?.tipo === 'botones' && (
           <div className={`chat-opciones ${opciones.clase ?? ''}`}>
@@ -232,8 +264,29 @@ export default function ChatOCN({ contar }) {
   )
 }
 
-// Solo **negrita**; el resto se escapa (los textos vienen del guion o de opciones fijas).
+// Solo **negrita** y [enlaces](https://...); el resto se escapa.
 function negrita(t) {
-  const esc = String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-  return esc.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')
+  const esc = String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+  return esc
+    .replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')
+    .replace(/\[([^\]]+)\]\((https:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
+}
+
+function TarjetaReclamo({ texto }) {
+  const [valor, setValor] = useState(texto)
+  const [copiado, setCopiado] = useState(false)
+  async function copiar() {
+    try { await navigator.clipboard.writeText(valor); setCopiado(true); setTimeout(() => setCopiado(false), 2000) } catch { /* el usuario puede seleccionar a mano */ }
+  }
+  return (
+    <div className="reclamo-carta">
+      <div className="reclamo-cab"><b>Tu reclamo</b><small>Completa los campos entre [ ]</small></div>
+      <textarea value={valor} onChange={(e) => setValor(e.target.value)} rows={12} aria-label="Texto del reclamo" />
+      <div className="reclamo-botones">
+        <button onClick={copiar}>{copiado ? '✓ Copiado' : '📋 Copiar'}</button>
+        <a href={`mailto:?subject=${encodeURIComponent('Reclamo por falla de servicio')}&body=${encodeURIComponent(valor)}`}>✉️ Correo</a>
+        {navigator.share && <button onClick={() => navigator.share({ text: valor }).catch(() => {})}>↗ Compartir</button>}
+      </div>
+    </div>
+  )
 }

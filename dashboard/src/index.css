@@ -353,3 +353,12 @@ button { font: inherit; color: inherit; cursor: pointer; }
   .vistas button { padding: 7px 9px; font-size: 13px; }
   .barra .vivo { display: none; }
 }
+
+/* Reclamo formal en el chat */
+.burb a { color: #5ac8fa; font-weight: 700; }
+.reclamo-carta { align-self: stretch; background: #f4f1ea; color: #1d1d1b; border-radius: 12px; padding: 12px; display: grid; gap: 8px; box-shadow: 0 6px 18px rgba(0,0,0,.4); animation: burb-entra .3s ease-out; }
+.reclamo-cab { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.reclamo-cab small { color: #6b6a63; font-size: 11px; }
+.reclamo-carta textarea { width: 100%; resize: vertical; border: 1px solid #d8d4ca; border-radius: 8px; background: #fffdf8; color: #1d1d1b; font: 13px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; padding: 10px; }
+.reclamo-botones { display: flex; gap: 6px; flex-wrap: wrap; }
+.reclamo-botones button, .reclamo-botones a { background: #1d1d1b; color: #fff; border: 0; border-radius: 999px; padding: 8px 14px; font-weight: 700; font-size: 13px; text-decoration: none; }
