@@ -362,3 +362,162 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .reclamo-carta textarea { width: 100%; resize: vertical; border: 1px solid #d8d4ca; border-radius: 8px; background: #fffdf8; color: #1d1d1b; font: 13px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; padding: 10px; }
 .reclamo-botones { display: flex; gap: 6px; flex-wrap: wrap; }
 .reclamo-botones button, .reclamo-botones a { background: #1d1d1b; color: #fff; border: 0; border-radius: 999px; padding: 8px 14px; font-weight: 700; font-size: 13px; text-decoration: none; }
+
+/* ───────────── Interfaz v2: más pulida y pensada para el celular ───────────── */
+:root {
+  --fondo: #0a0c11;
+  --panel: #12161f;
+  --panel-2: #1a1f2b;
+  --borde: #252b39;
+  --texto: #f2f4f8;
+  --tenue: #9aa3b5;
+  --acento: #5ac8fa;      /* asistente y elementos interactivos */
+  --electrico: #3fb8f5;   /* cortes de luz (SEC) */
+  --tabbar-alto: 64px;
+  --radio: 16px;
+  font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-feature-settings: 'cv11', 'ss01';
+}
+.barra { height: var(--barra-alto); padding: 0 18px; background: rgba(18,22,31,.92); backdrop-filter: blur(10px); padding-top: env(safe-area-inset-top); }
+.logo { width: 30px; height: 30px; flex: none; fill: none; stroke: var(--rojo); stroke-width: 2.4; stroke-linecap: round; filter: drop-shadow(0 0 6px rgba(229,37,42,.6)); }
+.logo circle { fill: var(--rojo); stroke: none; animation: latido 2.4s infinite; }
+.marca h1 { font-size: 18px; font-weight: 800; letter-spacing: .08em; }
+.vistas button { font-weight: 600; transition: background .15s, color .15s; }
+.vistas button:hover:not(.activo) { color: var(--texto); }
+.btn-reportar-top {
+  border: 0; background: var(--rojo); color: #fff; font-weight: 700; font-size: 14px; padding: 9px 16px; border-radius: 999px;
+  box-shadow: 0 4px 16px rgba(229,37,42,.35); white-space: nowrap; transition: transform .1s;
+}
+.btn-reportar-top:active { transform: scale(.97); }
+
+/* Franja "Ahora en Chile" sobre el mapa */
+.ahora {
+  position: absolute; z-index: 940; top: calc(var(--barra-alto) + 12px); left: 50%; transform: translateX(-50%);
+  display: flex; gap: 8px; max-width: calc(100% - 24px); overflow-x: auto; scrollbar-width: none; pointer-events: auto;
+}
+.ahora::-webkit-scrollbar { display: none; }
+.kpi-chip {
+  display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; font-size: 13px; color: var(--tenue);
+  background: rgba(18,22,31,.9); border: 1px solid var(--borde); border-radius: 999px; padding: 7px 12px;
+  backdrop-filter: blur(8px); box-shadow: 0 4px 14px rgba(0,0,0,.35);
+}
+.kpi-chip b { color: var(--texto); font-weight: 700; font-variant-numeric: tabular-nums; }
+.kpi-chip > i { width: 9px; height: 9px; border-radius: 50%; background: var(--verde); box-shadow: 0 0 8px var(--verde); }
+.kpi-chip.rojo > i { background: var(--rojo); box-shadow: 0 0 8px var(--rojo); animation: latido 1.6s infinite; }
+.kpi-chip.amarillo > i { background: var(--naranjo); box-shadow: 0 0 8px var(--naranjo); }
+.kpi-chip.verde { color: var(--texto); }
+button.kpi-chip { font: inherit; font-size: 13px; cursor: pointer; }
+.kpi-chip.electrico { border-color: rgba(63,184,245,.45); color: #bfe9ff; }
+.app:not(.vista-chile) .ahora { display: none; }
+.sin-caidas { top: 64px; }
+
+/* Botón flotante para reportar (escritorio) */
+.fab-reportar {
+  position: fixed; z-index: 990; right: 360px; bottom: 26px; display: flex; align-items: center; gap: 12px;
+  border: 0; border-radius: 999px; padding: 12px 20px 12px 14px; color: #fff;
+  background: linear-gradient(135deg, #ff4b4f, #c4161b); box-shadow: 0 10px 30px rgba(229,37,42,.45);
+  transition: transform .12s;
+}
+.fab-reportar:hover { transform: translateY(-2px); }
+.fab-pulso { width: 14px; height: 14px; border-radius: 50%; background: #fff; box-shadow: 0 0 0 0 rgba(255,255,255,.7); animation: fab-onda 1.8s infinite; flex: none; }
+@keyframes fab-onda { 100% { box-shadow: 0 0 0 14px rgba(255,255,255,0); } }
+.fab-txt { display: grid; text-align: left; font-size: 12px; line-height: 1.25; opacity: .95; }
+.fab-txt b { font-size: 15px; }
+.app:not(.vista-chile):not(.vista-mundo) .fab-reportar { right: 26px; }
+
+/* Asistente: panel a la derecha en escritorio */
+.asis.chat { left: auto; right: 360px; top: auto; bottom: 22px; position: fixed; width: min(400px, calc(100% - 28px)); max-height: min(640px, calc(100dvh - var(--barra-alto) - 44px)); z-index: 1100; }
+.app:not(.vista-chile):not(.vista-mundo) .asis.chat { right: 22px; }
+
+/* Capa de cortes de luz en el mapa */
+.chip-luz {
+  position: absolute; z-index: 940; right: 12px; top: 12px; border: 1px solid rgba(63,184,245,.4); background: rgba(18,22,31,.92);
+  color: #bfe9ff; border-radius: 999px; padding: 7px 12px; font-size: 13px; font-weight: 600; backdrop-filter: blur(8px);
+}
+.chip-luz b { margin-left: 4px; background: rgba(63,184,245,.2); padding: 1px 7px; border-radius: 999px; }
+.chip-luz.on { background: var(--electrico); color: #04202e; border-color: var(--electrico); }
+.chip-luz.on b { background: rgba(4,32,46,.18); }
+
+/* Vista Cortes de luz */
+.cortes { max-width: 860px; margin: 0 auto; padding: 22px 16px 120px; display: grid; gap: 14px; }
+.cortes-cab { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.cortes-cab h2 { margin: 2px 0 4px; font-size: 26px; letter-spacing: -.02em; font-weight: 700; }
+.cortes-cab h2 b { color: var(--electrico); font-variant-numeric: tabular-nums; }
+.sobre { margin: 0; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--electrico); font-weight: 700; }
+.tenue { margin: 0; color: var(--tenue); font-size: 13px; }
+.btn-sec { border: 1px solid rgba(63,184,245,.5); background: rgba(63,184,245,.12); color: #bfe9ff; border-radius: 999px; padding: 9px 16px; font-weight: 600; }
+.cortes-por-que { margin: 0; background: var(--panel); border: 1px solid var(--borde); border-left: 4px solid var(--electrico); border-radius: 12px; padding: 12px 14px; font-size: 14px; line-height: 1.45; color: #d6dbe5; }
+.tarjeta-cab { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+.tarjeta-cab input { background: var(--panel-2); border: 1px solid var(--borde); color: var(--texto); border-radius: 999px; padding: 8px 14px; font: inherit; font-size: 14px; min-width: 0; flex: 0 1 220px; }
+.tarjeta > h3 { margin-bottom: 10px; }
+.barras-luz { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.barras-luz li { display: grid; grid-template-columns: 130px minmax(0, 1fr) 70px; align-items: center; gap: 10px; font-size: 13px; }
+.barras-luz li span { color: var(--tenue); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.barras-luz li i { height: 10px; border-radius: 0 4px 4px 0; background: var(--electrico); display: block; }
+.barras-luz li b { text-align: right; font-variant-numeric: tabular-nums; }
+.lista-luz { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; max-height: 520px; overflow-y: auto; }
+.lista-luz li { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) 64px; align-items: center; gap: 10px; padding: 9px 4px; border-bottom: 1px solid var(--borde); }
+.lista-luz li span:first-child { display: grid; min-width: 0; }
+.lista-luz li span:first-child b { font-weight: 600; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lista-luz li small { color: var(--tenue); font-size: 11px; }
+.medidor { height: 6px; background: var(--panel-2); border-radius: 4px; overflow: hidden; }
+.medidor i { display: block; height: 100%; background: var(--electrico); border-radius: 4px; }
+.lista-luz em { font-style: normal; font-weight: 700; text-align: right; font-variant-numeric: tabular-nums; }
+.lista-luz li.vacio { display: block; border: 0; }
+.cortes .pie a, .stats .pie a { color: #9ec5ff; }
+
+/* Barra de pestañas inferior (solo celular) */
+.tabbar { display: none; }
+@media (max-width: 760px) {
+  :root { --barra-alto: 54px; }
+  .barra { padding: 0 12px; padding-top: env(safe-area-inset-top); }
+  .barra .vistas, .btn-reportar-top { display: none; }
+  .vivo { margin-left: auto; }
+  .tabbar {
+    display: grid; grid-template-columns: repeat(5, 1fr); position: fixed; left: 0; right: 0; bottom: 0; z-index: 1200;
+    height: calc(var(--tabbar-alto) + env(safe-area-inset-bottom)); padding-bottom: env(safe-area-inset-bottom);
+    background: rgba(14,17,24,.96); border-top: 1px solid var(--borde); backdrop-filter: blur(12px);
+  }
+  .tabbar button { border: 0; background: none; display: grid; place-items: center; align-content: center; gap: 2px; font-size: 11px; font-weight: 600; color: var(--tenue); }
+  .tabbar button span { font-size: 19px; line-height: 1; filter: grayscale(.6); opacity: .8; }
+  .tabbar button.activo { color: var(--texto); }
+  .tabbar button.activo span { filter: none; opacity: 1; }
+  .tabbar .tab-reportar { color: #fff; }
+  .tabbar .tab-reportar span {
+    width: 46px; height: 46px; margin-top: -22px; border-radius: 50%; display: grid; place-items: center; font-size: 26px; font-weight: 400;
+    background: linear-gradient(135deg, #ff4b4f, #c4161b); box-shadow: 0 6px 18px rgba(229,37,42,.5), 0 0 0 4px var(--fondo); filter: none; opacity: 1;
+  }
+  .app { height: 100dvh; padding-bottom: calc(var(--tabbar-alto) + env(safe-area-inset-bottom)); }
+  .ahora { top: calc(var(--barra-alto) + env(safe-area-inset-top) + 10px); left: 12px; transform: none; max-width: calc(100% - 24px); }
+  .chip-luz { top: 52px; right: 12px; }
+  .sin-caidas { top: 96px; }
+  .fab-reportar { right: 12px; left: 12px; bottom: calc(var(--tabbar-alto) + 76px + env(safe-area-inset-bottom)); justify-content: center; display: none; }
+  .panel { bottom: 0; }
+  .asis.chat {
+    position: fixed; left: 0; right: 0; bottom: calc(var(--tabbar-alto) + env(safe-area-inset-bottom)); top: auto; width: auto;
+    max-height: calc(100dvh - var(--barra-alto) - var(--tabbar-alto) - env(safe-area-inset-bottom) - 24px);
+    border-radius: 20px 20px 0 0; border-bottom: 0;
+  }
+  .cortes { padding-bottom: 40px; }
+  .barras-luz li { grid-template-columns: 96px minmax(0, 1fr) 58px; }
+  .stats { padding-bottom: 40px; }
+}
+/* Ajustes v2 */
+.ico { width: 22px; height: 22px; }
+@media (min-width: 761px) {
+  .ahora { left: calc((100% - 340px) / 2); }
+  .app.vista-mundo .ahora { left: 50%; }
+  .chip-luz { right: 352px; }
+  .fab-reportar { right: auto; left: 16px; bottom: 26px; }
+  .asis.chat { right: auto; left: 16px; bottom: 22px; }
+  .app:not(.vista-chile):not(.vista-mundo) .fab-reportar { right: 26px; left: auto; }
+  .app:not(.vista-chile):not(.vista-mundo) .asis.chat { right: 22px; left: auto; }
+}
+@media (max-width: 760px) {
+  .tabbar { background: #0e1118; }
+  .tabbar .ico { width: 23px; height: 23px; opacity: .85; }
+  .tabbar button.activo .ico { opacity: 1; color: var(--texto); }
+  .tabbar .tab-reportar span .ico { width: 26px; height: 26px; stroke-width: 2.6; }
+  .chat-abierto .panel { display: none; }
+  .barra .vivo { display: flex; }
+}

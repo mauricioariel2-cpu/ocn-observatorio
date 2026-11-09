@@ -46,7 +46,7 @@ function SeguirZoom({ alCambiar }) {
   return null
 }
 
-export default function MapaCaidas({ comunas, paises, vista, nuevos, tri, meAfecta }) {
+export default function MapaCaidas({ comunas, paises, vista, nuevos, tri, meAfecta, luz = [], capaLuz = false, alternarLuz }) {
   const [zoom, setZoom] = useState(4)
   const nivel = nivelPorZoom(zoom)
   const puntos = useMemo(() => {
@@ -75,6 +75,11 @@ export default function MapaCaidas({ comunas, paises, vista, nuevos, tri, meAfec
 
   return (
     <>
+    {vista === 'chile' && luz.length > 0 && (
+      <button className={`chip-luz ${capaLuz ? 'on' : ''}`} onClick={alternarLuz} aria-pressed={capaLuz}>
+        ⚡ Cortes de luz <b>{luz.length}</b>
+      </button>
+    )}
     {puntos.length === 0 && (
       <div className="sin-caidas" role="status">
         <b>Sin caídas activas {vista === 'chile' ? 'en Chile' : 'en el mundo'}</b>
@@ -107,6 +112,12 @@ export default function MapaCaidas({ comunas, paises, vista, nuevos, tri, meAfec
         <CircleMarker key={nombre} center={[lat, lon]} radius={6} className="region-ok"
           pathOptions={{ color: '#34c759', fillColor: '#34c759', fillOpacity: 0.55, weight: 1.5 }}>
           <Tooltip direction="top">{nombre}: sin fallas reportadas ahora</Tooltip>
+        </CircleMarker>
+      ))}
+      {capaLuz && vista === 'chile' && luz.filter((c) => c.latitud != null).map((c) => (
+        <CircleMarker key={`luz-${c.comuna}`} center={[c.latitud, c.longitud]} radius={Math.min(4 + Math.sqrt(c.clientes) / 3, 22)}
+          pathOptions={{ color: '#9fe3ff', fillColor: '#3fb8f5', fillOpacity: 0.35, weight: 1.5, dashArray: '3 3' }}>
+          <Tooltip direction="top">⚡ {c.comuna}: {c.clientes.toLocaleString('es-CL')} clientes sin luz (SEC)</Tooltip>
         </CircleMarker>
       ))}
       {puntos.map((p) => (

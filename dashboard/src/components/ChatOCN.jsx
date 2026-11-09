@@ -21,8 +21,7 @@ function regionCercana(lat, lon) {
 
 // Chat guiado: el asistente conversa con la persona afectada y le pide los datos de a uno.
 // Las respuestas del bot son guiones fijos; todos los números que muestra son conteos reales.
-export default function ChatOCN({ contar }) {
-  const [abierto, setAbierto] = useState(true)
+export default function ChatOCN({ contar, abierto, setAbierto, verMapa }) {
   const [msgs, setMsgs] = useState([])
   const [escribiendo, setEscribiendo] = useState(false)
   const [opciones, setOpciones] = useState(null) // { tipo: 'botones'|'region'|'texto', ... }
@@ -45,12 +44,13 @@ export default function ChatOCN({ contar }) {
   const preguntar = (o) => setOpciones(o)
   const responder = (texto, siguiente) => { setOpciones(null); yo(texto); siguiente() }
 
+  // La conversación parte la primera vez que se abre el chat, y se mantiene al cerrarlo.
   useEffect(() => {
-    if (iniciado.current) return
+    if (!abierto || iniciado.current) return
     iniciado.current = true
     inicio()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [abierto])
 
   async function inicio() {
     const deteccion = detectarCompania().catch(() => null)
@@ -160,7 +160,7 @@ export default function ChatOCN({ contar }) {
         ...(otras > 0 ? [`Otros sitios de reportes registran además ${otras} reporte${otras === 1 ? '' : 's'} de ${d.empresa} en ${d.region}.`] : []),
         'Mientras más personas reporten, más fuerza tiene el reclamo ante la compañía y SUBTEL. Comparte OCN con tus vecinos 🙏',
       )
-      preguntar({ tipo: 'botones', items: [['📝 Armar mi reclamo', armarReclamo], ['Compartir por WhatsApp', compartir], ['Ver el mapa', () => setAbierto(false)]] })
+      preguntar({ tipo: 'botones', items: [['📝 Armar mi reclamo', armarReclamo], ['Compartir por WhatsApp', compartir], ['Ver el mapa', () => { setAbierto(false); verMapa?.() }]] })
     } catch (e) {
       setEscribiendo(false)
       await bot(`No pude registrar el reporte: ${e.message}`)
@@ -192,7 +192,7 @@ export default function ChatOCN({ contar }) {
       setEscribiendo(false)
       const n = todos.filter((r) => r.empresa === d.empresa).length
       await bot(`💪 Sumado. En los últimos 30 días van **${n} reclamo${n === 1 ? '' : 's'}** contra ${d.empresa} registrados en OCN. Mientras más seamos, más difícil es ignorarnos.`)
-      preguntar({ tipo: 'botones', items: [['Compartir por WhatsApp', compartir], ['Ver el mapa', () => setAbierto(false)]] })
+      preguntar({ tipo: 'botones', items: [['Compartir por WhatsApp', compartir], ['Ver el mapa', () => { setAbierto(false); verMapa?.() }]] })
     } catch (e) {
       setEscribiendo(false)
       await bot(`No pude sumarlo: ${e.message}`)
@@ -205,13 +205,7 @@ export default function ChatOCN({ contar }) {
     window.open(`https://wa.me/?text=${encodeURIComponent(texto)}`, '_blank', 'noopener')
   }
 
-  if (!abierto) {
-    return (
-      <button className="asis-pildora" onClick={() => setAbierto(true)}>
-        <span className="asis-ojo" aria-hidden /> Asistente OCN
-      </button>
-    )
-  }
+  if (!abierto) return null
 
   return (
     <section className="asis chat" aria-label="Asistente OCN">
@@ -221,7 +215,7 @@ export default function ChatOCN({ contar }) {
           <b>Asistente OCN</b>
           <small>{escribiendo ? 'escribiendo…' : 'en línea'}</small>
         </div>
-        <button className="asis-min" onClick={() => setAbierto(false)} aria-label="Minimizar">▾</button>
+        <button className="asis-min" onClick={() => setAbierto(false)} aria-label="Cerrar el asistente">✕</button>
       </header>
       <div className="chat-hilo" aria-live="polite">
         {msgs.map((m, i) => m.reclamo
