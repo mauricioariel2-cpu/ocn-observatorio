@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import MapaCaidas from './components/MapaCaidas'
 import PanelNacional from './components/PanelNacional'
 import ReportarFalla from './components/ReportarFalla'
-import Asistente from './components/Asistente'
+import ChatOCN from './components/ChatOCN'
 import { REGIONES_CL } from './lib/geo'
 import { cargarReportes, cargarVecinos, contarSimilares, escucharNuevos, estadoNacional, mezclar, puntosComuna, puntosPais, resumirVecinos, triangular } from './lib/datos'
 
@@ -109,7 +109,7 @@ export default function App() {
           abierto={panelAbierto}
           alternar={() => setPanelAbierto((a) => !a)}
         />
-        <Asistente contar={contar} vecinosEn={(e, r) => contarSimilares(vecinos, filas, e, r)} />
+        <ChatOCN contar={contar} />
       </main>
       <ReportarFalla abierto={reporte.abierto} regionInicial={reporte.region}
         contar={contar}
