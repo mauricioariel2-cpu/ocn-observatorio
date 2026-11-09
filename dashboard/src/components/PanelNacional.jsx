@@ -1,6 +1,9 @@
-const ETIQUETA = { falla_masiva: 'Falla masiva', posibles_problemas: 'Posibles problemas', normal: 'Normal' }
+const ETIQUETA = { falla_masiva: 'Falla masiva', posibles_problemas: 'Posibles problemas', normal: 'Reportes aislados' }
 
-import { FUENTES_TOTALES } from '../lib/datos'
+import { FUENTES_TOTALES, semaforoRegiones } from '../lib/datos'
+import { REGIONES_CL } from '../lib/geo'
+
+const LUZ = { falla_masiva: 'Rojo', posibles_problemas: 'Amarillo', normal: 'Verde' }
 
 const FUENTE = { geoblackout: 'Geoblackout', fallacl: 'FallaCL', ioda: 'IODA', blackoutmap: 'Blackout Map', ocn: 'Vecinos OCN', downdetector: 'Downdetector' }
 const nombres = (set) => [...set].map((f) => FUENTE[f] ?? f).join(' + ')
@@ -31,15 +34,13 @@ export default function PanelNacional({ comunas, paises, nacional, tri, actualiz
         </ul>
         <p className="pie">Una falla se marca como confirmada solo si al menos 2 fuentes independientes la reportan en la última hora: reportes ciudadanos (Geoblackout, FallaCL, vecinos en OCN) y mediciones de red (IODA, sondas de Blackout Map).</p>
 
-        <h2>Zonas afectadas en Chile</h2>
-        {comunas.filter((c) => c.pais === 'CL').length === 0 && (
-          <p className="vacio">Aún no hay reportes con ubicación. Se pintarán apenas lleguen.</p>
-        )}
-        <ul className="lista">
-          {comunas.filter((c) => c.pais === 'CL').slice(0, 12).map((c) => (
-            <li key={c.id} className={c.gravedad}>
-              <span>{c.titulo}<small>{c.subtitulo}</small></span>
-              <b>{c.total}</b>
+        <h2>Semáforo por región</h2>
+        <ul className="lista semaforo">
+          {semaforoRegiones(comunas, REGIONES_CL, tri).map((r) => (
+            <li key={r.nombre} className={r.gravedad}>
+              <i className={`luz ${r.gravedad}`} aria-label={LUZ[r.gravedad]} />
+              <span>{r.nombre}<small>{r.total === 0 ? 'Sin reportes ahora' : `${ETIQUETA[r.gravedad]}${r.gravedad !== 'normal' && !r.confirmado ? ' (sin confirmar)' : ''} · ${r.principales.join(', ')}`}</small></span>
+              <b>{r.total}</b>
             </li>
           ))}
         </ul>
@@ -67,7 +68,7 @@ export default function PanelNacional({ comunas, paises, nacional, tri, actualiz
         )}
 
         <p className="leyenda">
-          <i className="falla_masiva" /> Falla masiva <i className="posibles_problemas" /> Posibles problemas <i className="sin-confirmar" /> Sin confirmar <i className="pocos" /> Pocos reportes <i className="region-ok" /> Sin fallas
+          <i className="falla_masiva" /> Rojo: falla masiva <i className="posibles_problemas" /> Amarillo: posibles problemas <i className="region-ok" /> Verde: normal o reportes aislados <i className="sin-confirmar" /> Sin confirmar
         </p>
         <p className="pie">
           Actualizado {actualizado ? actualizado.toLocaleTimeString('es-CL') : '…'} · Fuentes: Geoblackout, FallaCL, IODA (© Georgia Tech Research Corporation) y <a href="https://blackoutmap.net" target="_blank" rel="noreferrer">Blackout Map</a> (CC BY-NC 4.0)

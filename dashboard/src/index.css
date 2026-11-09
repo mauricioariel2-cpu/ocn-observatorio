@@ -6,7 +6,7 @@
   --texto: #eef0f4;
   --tenue: #98a0b3;
   --rojo: #e5252a;
-  --naranjo: #f08a24;
+  --naranjo: #ffc21a; /* amarillo del semáforo */
   --verde: #34c759;
   --barra-alto: 60px;
   font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
@@ -52,8 +52,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 .burbuja:hover { transform: scale(1.08); }
 .burbuja.posibles_problemas {
-  background: radial-gradient(circle at 35% 35%, rgba(255,190,120,.95), rgba(240,138,36,.85) 60%, rgba(170,80,0,.85));
-  animation: none;
+  background: radial-gradient(circle at 35% 35%, rgba(255,235,140,.98), rgba(255,194,26,.92) 60%, rgba(190,130,0,.9));
+  color: #1a1400; animation: none;
 }
 .burbuja.nuevo { animation: onda .9s infinite; }
 .burbuja span { text-shadow: 0 1px 2px rgba(0,0,0,.6); }
@@ -128,8 +128,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .leyenda i.region-ok { background: var(--verde); margin-left: 8px; width: 10px; height: 10px; }
 /* Lugares con pocos reportes (sin falla declarada) */
 .burbuja.normal {
-  background: radial-gradient(circle at 35% 35%, rgba(170,180,200,.9), rgba(95,105,125,.85) 60%, rgba(55,62,78,.85));
-  border-color: rgba(255,255,255,.6); animation: none; opacity: .9;
+  background: radial-gradient(circle at 35% 35%, rgba(140,235,165,.95), rgba(52,199,89,.88) 60%, rgba(20,120,50,.88));
+  border-color: rgba(255,255,255,.7); animation: none; border-style: solid; opacity: .95;
 }
 .leyenda i.pocos { background: #6b7385; margin-left: 8px; }
 
@@ -161,3 +161,11 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .modal .ok-msg { margin: 0; color: var(--verde); font-weight: 700; }
 .modal .cerrar { position: absolute; top: 12px; right: 12px; background: none; border: 0; font-size: 18px; color: var(--tenue); }
 @media (max-width: 760px) { .btn-reportar { bottom: 80px; left: 12px; } }
+
+/* Semáforo por región */
+.burbuja.posibles_problemas span { text-shadow: none; }
+.semaforo li { padding: 8px 12px; }
+.luz { width: 14px; height: 14px; border-radius: 50%; flex: none; background: var(--verde); box-shadow: 0 0 8px var(--verde); }
+.luz.posibles_problemas { background: var(--naranjo); box-shadow: 0 0 8px var(--naranjo); }
+.luz.falla_masiva { background: var(--rojo); box-shadow: 0 0 10px var(--rojo); animation: latido 1.6s infinite; }
+.semaforo li.normal b { color: var(--tenue); font-size: 15px; }

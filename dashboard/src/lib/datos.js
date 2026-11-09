@@ -196,3 +196,19 @@ export function resumirVecinos(vecinos, centros) {
     }
   })
 }
+
+// Semáforo de las 16 regiones: rojo (falla masiva), amarillo (posibles problemas),
+// verde (normal: sin reportes o solo reportes aislados). Todo sale de los datos reales.
+const sinTilde = (t) => String(t ?? '').normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase()
+export function semaforoRegiones(comunas, regiones, tri) {
+  return regiones.map(([nombre]) => {
+    const enRegion = comunas.filter((c) => c.pais === 'CL' && sinTilde(c.subtitulo ?? c.titulo) === sinTilde(nombre))
+    const detalle = enRegion.flatMap((c) => c.detalle)
+    const gravedad = enRegion.reduce((g, c) => peor(g, c.gravedad), 'normal')
+    const porEmpresa = new Map()
+    for (const f of detalle) porEmpresa.set(f.empresa, (porEmpresa.get(f.empresa) ?? 0) + (f.cantidad_reportes ?? 0))
+    const principales = [...porEmpresa].sort((a, b) => b[1] - a[1]).slice(0, 2).map(([e, n]) => `${e} ${n}`)
+    const confirmado = detalle.some((f) => f.gravedad !== 'normal' && (verifDe(tri, f).confirmado || f.fuente === 'ioda'))
+    return { nombre, gravedad, total: enRegion.reduce((s, c) => s + c.total, 0), principales, confirmado }
+  }).sort((a, b) => ORDEN[b.gravedad] - ORDEN[a.gravedad] || b.total - a.total)
+}
