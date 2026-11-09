@@ -5,6 +5,7 @@ create table if not exists public.reportes_caidas (
   id                bigint generated always as identity primary key,
   fuente            text        not null,               -- 'downdetector' | 'geoblackout'
   empresa           text        not null,               -- 'DIRECTV', 'Movistar', ...
+  pais              text        not null default 'CL',  -- ISO 3166-1 alfa-2
   servicio          text,                               -- 'internet_fijo' | 'internet_movil' | 'tv' | ...
   region            text,
   comuna            text,

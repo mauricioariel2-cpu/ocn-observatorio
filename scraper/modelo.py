@@ -63,6 +63,7 @@ def ventana_15min(dt: datetime | None = None) -> datetime:
 class Reporte:
     fuente: str
     empresa: str
+    pais: str = "CL"  # código ISO de 2 letras
     servicio: str | None = None
     region: str | None = None
     comuna: str | None = None
@@ -78,9 +79,9 @@ class Reporte:
 
     @property
     def hash_dedup(self) -> str:
-        """Mismo origen + empresa + servicio + comuna + ventana de 15 min = mismo registro."""
+        """Mismo origen + país + empresa + servicio + comuna + ventana de 15 min = mismo registro."""
         clave = "|".join(
-            str(x) for x in (self.fuente, self.empresa, self.servicio, self.comuna, self.ventana.isoformat())
+            str(x) for x in (self.fuente, self.pais, self.empresa, self.servicio, self.comuna, self.ventana.isoformat())
         )
         return hashlib.sha256(clave.encode()).hexdigest()
 

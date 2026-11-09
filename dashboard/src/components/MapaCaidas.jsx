@@ -1,41 +1,98 @@
-import { MapContainer, TileLayer, CircleMarker, Popup, Tooltip } from 'react-leaflet'
+import { useEffect, useMemo, useState } from 'react'
+import L from 'leaflet'
+import { MapContainer, Marker, Popup, TileLayer, ZoomControl, useMap, useMapEvents } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
+import { puntosRegion } from '../lib/datos'
+import { VISTAS, nivelPorZoom } from '../lib/geo'
 
-const COLOR = { falla_masiva: '#d7191c', posibles_problemas: '#f28c28' }
+const SERVICIO = { internet_fijo: 'Internet hogar', internet_movil: 'Internet móvil', tv: 'TV', internet: 'Internet', telefonia_fija: 'Telefonía' }
 
-function radio(total) {
-  return Math.min(8 + Math.sqrt(total) * 4, 40)
+function diametro(total) {
+  return Math.round(Math.min(30 + Math.sqrt(total) * 7, 92))
 }
 
-export default function MapaCaidas({ puntos }) {
+function icono(p, nuevo) {
+  const d = diametro(p.total)
+  const clases = ['burbuja', p.gravedad, nuevo ? 'nuevo' : ''].join(' ')
+  return L.divIcon({
+    className: 'burbuja-wrap',
+    html: `<div class="${clases}" style="width:${d}px;height:${d}px;font-size:${Math.max(12, d / 3.2)}px"><span>${p.total}</span></div>`,
+    iconSize: [d, d],
+    iconAnchor: [d / 2, d / 2],
+  })
+}
+
+// Mueve la cámara cuando cambias entre Chile y Mundo.
+function Camara({ vista }) {
+  const map = useMap()
+  useEffect(() => {
+    const v = VISTAS[vista]
+    if (v.bounds) map.flyToBounds(v.bounds, { duration: 1.2, padding: [10, 10] })
+    else map.flyTo(v.centro, v.zoom, { duration: 1.2 })
+  }, [vista, map])
+  return null
+}
+
+function SeguirZoom({ alCambiar }) {
+  const map = useMapEvents({ zoomend: () => alCambiar(map.getZoom()) })
+  return null
+}
+
+export default function MapaCaidas({ comunas, paises, vista, nuevos }) {
+  const [zoom, setZoom] = useState(4)
+  const nivel = nivelPorZoom(zoom)
+  const puntos = useMemo(() => {
+    if (nivel === 'pais') return paises
+    // En la vista Chile solo se muestra Chile, para no confundir con países vecinos.
+    const enVista = (p) => vista !== 'chile' || p.pais === 'CL'
+    const lugares = comunas.filter(enVista)
+    const conDetalle = new Set(lugares.map((c) => c.pais))
+    const sinDetalle = paises.filter((p) => enVista(p) && !conDetalle.has(p.pais)) // país con solo total nacional
+    return [...(nivel === 'region' ? puntosRegion(lugares) : lugares), ...sinDetalle]
+  }, [nivel, comunas, paises, vista])
+  const iconos = useMemo(
+    () => Object.fromEntries(puntos.map((p) => [p.id, icono(p, p.detalle.some((f) => nuevos.has(f.id)))])),
+    [puntos, nuevos],
+  )
+
   return (
-    <MapContainer center={[-33.45, -70.66]} zoom={10} minZoom={4} className="mapa" worldCopyJump>
+    <MapContainer
+      whenReady={(e) => setZoom(e.target.getZoom())}
+      bounds={VISTAS.chile.bounds}
+      minZoom={2}
+      maxBounds={[[-85, -240], [85, 240]]}
+      worldCopyJump
+      className="mapa"
+      zoomControl={false}
+    >
       <TileLayer
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>'
+        url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+        subdomains="abcd"
       />
+      <ZoomControl position="bottomright" />
+      <Camara vista={vista} />
+      <SeguirZoom alCambiar={setZoom} />
       {puntos.map((p) => (
-        <CircleMarker
-          key={`${p.lat},${p.lon}`}
-          center={[p.lat, p.lon]}
-          radius={radio(p.total)}
-          pathOptions={{ color: COLOR[p.gravedad], fillColor: COLOR[p.gravedad], fillOpacity: 0.55, weight: 2 }}
-        >
-          <Tooltip>{p.comuna}: {p.total} reportes</Tooltip>
+        <Marker key={p.id} position={[p.lat, p.lon]} icon={iconos[p.id]}>
           <Popup>
-            <strong>{p.comuna}</strong>{p.region ? `, ${p.region}` : ''}
-            <ul className="popup-lista">
-              {p.empresas.map((e) => (
-                <li key={`${e.fuente}-${e.empresa}-${e.servicio}`}>
-                  {e.empresa} · {e.servicio ?? 'servicio s/i'}: <b>{e.cantidad_reportes}</b> ({e.gravedad_texto})
-                </li>
-              ))}
-            </ul>
-            <button className="btn-afecta" disabled title="Llega en la fase del motor de reclamos">
-              Me afecta
-            </button>
+            <div className="popup">
+              <strong>{p.titulo}</strong>
+              {p.subtitulo && <span className="popup-sub">{p.subtitulo}</span>}
+              <div className="popup-total">{p.total} reportes · últimas 3 h</div>
+              <ul>
+                {p.detalle.map((e) => (
+                  <li key={e.id ?? e.hash_dedup}>
+                    <b>{e.empresa}</b> {e.comuna && nivel !== 'comuna' ? `· ${e.comuna} ` : ''}
+                    · {SERVICIO[e.servicio] ?? e.servicio ?? 's/i'}: {e.cantidad_reportes ?? '–'}
+                  </li>
+                ))}
+              </ul>
+              {nivel !== 'comuna' && <em className="popup-tip">Acércate para ver más detalle</em>}
+              <button className="btn-afecta" disabled title="Llega con el motor de reclamos">Me afecta</button>
+            </div>
           </Popup>
-        </CircleMarker>
+        </Marker>
       ))}
     </MapContainer>
   )
