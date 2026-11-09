@@ -563,14 +563,18 @@ async function filasIoda(): Promise<Fila[]> {
 
 async function filasBlackoutMap(): Promise<Fila[]> {
   const filas: Fila[] = [];
+  const estados: string[] = []; // códigos HTTP, para saber por qué falla si falla
   for (const slug of Object.keys(PROVEEDORES_BM)) {
     const r = await fetch(`${BLACKOUT_URL}/providers/${slug}`, { headers: cabeceras("text/html") });
-    if (r.ok) { const f = await filaProveedorBM(slug, await r.text()); if (f) filas.push(f); }
+    estados.push(`${slug}:${r.status}`);
+    if (r.ok) { const f = await filaProveedorBM(slug, await r.text()); if (f) filas.push(f); else estados.push(`${slug}:sin-formato`); }
+    else await r.body?.cancel();
     await pausa(1100); // Crawl-delay: 1
   }
   const st = await fetch(`${BLACKOUT_URL}/data/status.json`, { headers: cabeceras("application/json") });
-  if (st.ok) filas.push(...await filasRegionesBM(await st.json()));
-  if (!filas.length) throw new Error("Blackout Map sin datos; ¿cambió la página?");
+  estados.push(`status.json:${st.status}`);
+  if (st.ok) filas.push(...await filasRegionesBM(await st.json())); else await st.body?.cancel();
+  if (!filas.length) throw new Error(`Blackout Map sin datos (${estados.join(" ")})`);
   return filas;
 }
 
