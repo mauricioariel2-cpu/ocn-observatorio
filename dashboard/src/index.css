@@ -528,3 +528,10 @@ button.kpi-chip { font: inherit; font-size: 13px; cursor: pointer; }
 .burb.bot { white-space: pre-line; }
 .leyenda-resp { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; color: var(--tenue); margin: 6px 0 0; }
 .leyenda-resp i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+
+/* Semáforo mundial */
+.leyenda-mundo { position: absolute; z-index: 500; left: 12px; bottom: 96px; max-width: min(360px, calc(100% - 24px)); display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; padding: 10px 12px; border-radius: 12px; background: rgba(18, 20, 26, 0.88); color: #e8e8ed; font-size: 12px; backdrop-filter: blur(6px); }
+.leyenda-mundo span { display: inline-flex; align-items: center; gap: 6px; }
+.leyenda-mundo i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.leyenda-mundo small { flex-basis: 100%; color: #a1a1aa; line-height: 1.35; }
+.leyenda-mundo a { color: #9fd3ff; }

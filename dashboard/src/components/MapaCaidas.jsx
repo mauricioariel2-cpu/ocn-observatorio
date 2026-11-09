@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import L from 'leaflet'
-import { CircleMarker, MapContainer, Marker, Popup, TileLayer, Tooltip, ZoomControl, useMap, useMapEvents } from 'react-leaflet'
+import { CircleMarker, GeoJSON, MapContainer, Marker, Popup, TileLayer, Tooltip, ZoomControl, useMap, useMapEvents } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import { FUENTES_TOTALES, puntosRegion, verifDe } from '../lib/datos'
 import { REGIONES_CL, VISTAS, nivelPorZoom } from '../lib/geo'
+import { COLOR_ESTADO, TEXTO_ESTADO, cargarContornos, cargarEstadoPaises, nombrePais } from '../lib/mundo'
 
 const SERVICIO = { internet_fijo: 'Internet hogar', internet_movil: 'Internet móvil', tv: 'TV', internet: 'Internet', telefonia_fija: 'Telefonía', streaming: 'Streaming', banca: 'Banca' }
 const norm = (t) => String(t ?? '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
@@ -39,6 +40,46 @@ function Camara({ vista }) {
     else map.flyTo(v.centro, v.zoom, { duration: 1.2 })
   }, [vista, map])
   return null
+}
+
+// Semáforo mundial: cada país pintado según el estado de su internet (estado_paises).
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c])
+function CapaMundo() {
+  const [geo, setGeo] = useState(null)
+  const [estados, setEstados] = useState(null)
+  useEffect(() => {
+    let vivo = true
+    const leer = () => cargarEstadoPaises().then((e) => vivo && setEstados(e)).catch(() => vivo && setEstados([]))
+    cargarContornos().then((g) => vivo && setGeo(g)).catch(() => {})
+    leer()
+    const id = setInterval(leer, 5 * 60_000)
+    return () => { vivo = false; clearInterval(id) }
+  }, [])
+  const porNum = useMemo(() => new Map((estados ?? []).filter((e) => e.iso_num != null).map((e) => [Number(e.iso_num), e])), [estados])
+  if (!geo || !estados) return null
+  const de = (f) => porNum.get(Number(f.id))
+  return (
+    <GeoJSON
+      key={estados.length + '|' + (estados[0]?.actualizado ?? '')}
+      data={geo}
+      style={(f) => {
+        const e = de(f)
+        const c = COLOR_ESTADO[e?.estado ?? 'sin_datos']
+        return { color: c, weight: 0.8, fillColor: c, fillOpacity: e?.estado === 'normal' ? 0.18 : e ? 0.5 : 0.08, opacity: 0.7 }
+      }}
+      onEachFeature={(f, capa) => {
+        const e = de(f)
+        const nombre = e ? nombrePais(e.cc, e.nombre) : (f.properties?.name ?? '')
+        capa.bindTooltip(
+          `<b>${esc(nombre)}</b><br>${esc(TEXTO_ESTADO[e?.estado ?? 'sin_datos'])}` +
+          (e?.detalle ? `<br><small>${esc(e.detalle)}</small>` : '') +
+          (e?.desde && e.estado !== 'normal' ? `<br><small>Desde ${esc(new Date(e.desde).toLocaleString('es-CL', { dateStyle: 'short', timeStyle: 'short' }))}</small>` : '') +
+          `<br><small>Medición de red: Blackout Map + IODA</small>`,
+          { sticky: true },
+        )
+      }}
+    />
+  )
 }
 
 function SeguirZoom({ alCambiar }) {
@@ -80,7 +121,16 @@ export default function MapaCaidas({ comunas, paises, vista, nuevos, tri, meAfec
         ⚡ Cortes de luz <b>{luz.length}</b>
       </button>
     )}
-    {puntos.length === 0 && (
+    {vista === 'mundo' && (
+      <div className="leyenda-mundo" role="note">
+        <span><i style={{ background: COLOR_ESTADO.normal }} />Normal</span>
+        <span><i style={{ background: COLOR_ESTADO.posibles_problemas }} />Problemas</span>
+        <span><i style={{ background: COLOR_ESTADO.falla_masiva }} />Caída</span>
+        <span><i style={{ background: COLOR_ESTADO.sin_datos }} />Sin datos</span>
+        <small>Color del país: mediciones de red de <a href="https://blackoutmap.net" target="_blank" rel="noreferrer">Blackout Map</a> (CC BY-NC) + IODA. Círculos: reportes de personas.</small>
+      </div>
+    )}
+    {puntos.length === 0 && vista !== 'mundo' && (
       <div className="sin-caidas" role="status">
         <b>Sin caídas activas {vista === 'chile' ? 'en Chile' : 'en el mundo'}</b>
         <span>Los círculos rojos aparecen apenas haya reportes masivos.</span>
@@ -108,6 +158,7 @@ export default function MapaCaidas({ comunas, paises, vista, nuevos, tri, meAfec
       <ZoomControl position="bottomright" />
       <Camara vista={vista} />
       <SeguirZoom alCambiar={setZoom} />
+      {vista === 'mundo' && <CapaMundo />}
       {tranquilas.map(([nombre, lat, lon]) => (
         <CircleMarker key={nombre} center={[lat, lon]} radius={6} className="region-ok"
           pathOptions={{ color: '#34c759', fillColor: '#34c759', fillOpacity: 0.55, weight: 1.5 }}>

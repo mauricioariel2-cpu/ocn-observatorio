@@ -983,7 +983,8 @@ async function rest(path: string, init: RequestInit = {}) {
     headers: { apikey: key, Authorization: `Bearer ${key}`, "Content-Type": "application/json", ...(init.headers ?? {}) },
   });
   if (!r.ok) throw new Error(`Supabase ${r.status}: ${await r.text()}`);
-  return r.status === 204 ? [] : r.json();
+  const txt = await r.text(); // return=minimal responde 201 sin cuerpo
+  return txt ? JSON.parse(txt) : [];
 }
 
 const pausa = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -1047,6 +1048,7 @@ async function filasBlackoutMap(): Promise<Fila[]> {
   const st = await fetch(`${BLACKOUT_URL}/data/status.json`, { headers: cabeceras("application/json") });
   if (!st.ok) { await st.body?.cancel(); throw new Error(`Blackout Map status.json HTTP ${st.status}`); }
   const status = await st.json();
+  await guardarEstadoPaises(status).catch((e) => console.error("estado_paises:", e));
   return [...await filasRegionesBM(status), ...await filasPaisesBM(status)];
 }
 
@@ -1158,6 +1160,26 @@ export async function filasPaisesBM(status: { countries?: Record<string, { s: st
     filas.push({ ...base, hash_dedup: await hash(["blackoutmap", "pais", cc, ventana]) });
   }
   return filas;
+}
+
+// Semáforo mundial: el estado de cada país según Blackout Map (sus sondas + IODA) va a estado_paises (sql/012).
+const ESTADO_PAIS_BM: Record<string, string> = { normal: "normal", degraded: "posibles_problemas", partial: "falla_masiva", blackout: "falla_masiva" };
+type PaisBM = { num?: number; name?: string; slug?: string; s: string; since?: string; up?: number; n?: number; conf?: string };
+export function filasEstadoPaises(status: { countries?: Record<string, PaisBM> }, ahora = new Date()) {
+  return Object.entries(status?.countries ?? {}).filter(([cc]) => /^[A-Z]{2}$/.test(cc)).map(([cc, c]) => ({
+    cc, iso_num: c.num ?? null, nombre: c.name ?? cc,
+    estado: ESTADO_PAIS_BM[c.s] ?? "sin_datos",
+    detalle: c.n ? `${c.up ?? 0} de ${c.n} puntos de medición responden` + (c.conf ? ` (${c.conf})` : "") : null,
+    desde: c.since ?? null,
+    url_fuente: `${BLACKOUT_URL}/country/${c.slug ?? cc.toLowerCase()}`,
+    actualizado: ahora.toISOString(),
+  }));
+}
+
+async function guardarEstadoPaises(status: { countries?: Record<string, PaisBM> }) {
+  const filas = filasEstadoPaises(status);
+  if (filas.length < 50) throw new Error(`status.json con solo ${filas.length} países: no se reemplaza`);
+  await rest("estado_paises?on_conflict=cc", { method: "POST", headers: { Prefer: "resolution=merge-duplicates,return=minimal" }, body: JSON.stringify(filas) });
 }
 
 async function corrida(): Promise<Record<string, unknown>> {
