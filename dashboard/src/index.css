@@ -71,6 +71,14 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .popup-tip { display: block; font-size: 12px; color: var(--tenue); margin-bottom: 8px; }
 .btn-afecta { width: 100%; background: var(--rojo); color: #fff; border: 0; padding: 9px 12px; border-radius: 8px; font-weight: 700; opacity: .55; cursor: not-allowed; }
 
+.sin-caidas {
+  position: absolute; top: 14px; left: 50%; transform: translateX(-50%); z-index: 950;
+  background: rgba(20,24,33,.92); border: 1px solid var(--borde); border-left: 4px solid var(--verde);
+  padding: 10px 14px; border-radius: 10px; display: flex; flex-direction: column; gap: 2px;
+  font-size: 13px; color: var(--tenue); max-width: calc(100% - 32px); pointer-events: none;
+}
+.sin-caidas b { color: var(--texto); font-size: 14px; }
+
 /* Panel lateral (escritorio) */
 .panel { width: 340px; flex: none; background: var(--panel); border-left: 1px solid var(--borde); display: flex; flex-direction: column; min-height: 0; z-index: 900; }
 .asa { display: none; }

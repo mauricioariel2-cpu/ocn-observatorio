@@ -56,6 +56,13 @@ export default function MapaCaidas({ comunas, paises, vista, nuevos }) {
   )
 
   return (
+    <>
+    {puntos.length === 0 && (
+      <div className="sin-caidas" role="status">
+        <b>Sin caídas activas {vista === 'chile' ? 'en Chile' : 'en el mundo'}</b>
+        <span>Los círculos rojos aparecen apenas haya reportes masivos.</span>
+      </div>
+    )}
     <MapContainer
       whenReady={(e) => setZoom(e.target.getZoom())}
       bounds={VISTAS.chile.bounds}
@@ -95,5 +102,6 @@ export default function MapaCaidas({ comunas, paises, vista, nuevos }) {
         </Marker>
       ))}
     </MapContainer>
+    </>
   )
 }
