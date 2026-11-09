@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { cargarReclamos } from '../lib/reclamos'
+import RespuestaEmpresas from './RespuestaEmpresas'
 
 // Color fijo por empresa (sigue a la entidad, nunca al ranking). Paleta categórica
 // validada para fondo oscuro (CVD ΔE ≥ 9.4 entre vecinos). El resto va a "Otras" en gris.
@@ -109,6 +110,12 @@ export default function Estadisticas({ nacional, vecinos }) {
         <header><h3>Reclamos formales armados en OCN · últimos 30 días</h3></header>
         <RankingReclamos filas={reclamos} />
         <p className="fuente">Cada persona suma un reclamo cuando confirma que lo envió a su compañía (máximo uno cada 6 horas por empresa). OCN no guarda nombres ni RUT.</p>
+      </section>
+
+      <section className="tarjeta">
+        <header><h3>¿Responden las compañías? · últimos 90 días</h3></header>
+        <RespuestaEmpresas />
+        <p className="fuente">Lo que contestan las personas cuando OCN les pregunta, cumplido el plazo, si su compañía respondió el reclamo. Respuestas anónimas, no una medición oficial. OCN no guarda el número de reclamo.</p>
       </section>
 
       <section className="tarjeta prediccion">

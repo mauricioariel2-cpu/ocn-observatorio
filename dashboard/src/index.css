@@ -521,3 +521,10 @@ button.kpi-chip { font: inherit; font-size: 13px; cursor: pointer; }
   .chat-abierto .panel { display: none; }
   .barra .vivo { display: flex; }
 }
+
+/* Seguimiento de reclamos: número de reclamo y calculadora de compensación */
+.chat-comp input[name=c] { flex: 2 1 140px; }
+.chat-comp input[name=d] { flex: 1 1 70px; max-width: 96px; }
+.burb.bot { white-space: pre-line; }
+.leyenda-resp { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; color: var(--tenue); margin: 6px 0 0; }
+.leyenda-resp i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }

@@ -3,7 +3,11 @@ import { enviarReporte } from '../lib/datos'
 import { REGIONES_CL } from '../lib/geo'
 import { detectarCompania } from '../lib/isp'
 import { dispositivo, guardarPerfil, leerPerfil } from '../lib/perfil'
-import { DERECHOS_SUBTEL, PORTAL_SUBTEL, cargarReclamos, registrarReclamo, textoReclamo } from '../lib/reclamos'
+import { DERECHOS_SUBTEL, PORTAL_SUBTEL, cargarReclamos, registrarReclamo, servicioTexto, textoReclamo } from '../lib/reclamos'
+import {
+  FICHA_CHILEATIENDE, PLAZO_CORTO, PLAZO_LARGO, actualizarReclamo, agregarReclamo, compensacion, descargarCalendario,
+  fechaCorta, habilesEntre, leerReclamos, pendientes, pesos, registrarResultado, sumarHabiles, textoInsistencia, vencidos,
+} from '../lib/seguimiento'
 
 const EMPRESAS = ['Movistar', 'Entel', 'VTR', 'Claro', 'WOM', 'GTD', 'Mundo', 'Telsur', 'Starlink', 'DIRECTV', 'Otro']
 const SERVICIOS = { internet_fijo: 'Internet de hogar', internet_movil: 'Internet móvil', tv: 'TV', telefonia: 'Teléfono' }
@@ -58,6 +62,10 @@ export default function ChatOCN({ contar, abierto, setAbierto, verMapa }) {
     red.current = await deteccion
     const r = red.current
     if (r?.empresa) await bot(`Veo que te conectas por **${r.empresa}** (red AS${r.asn}).`)
+    const [vencido] = vencidos()
+    if (vencido) { revisarReclamo(vencido); return }
+    const [esperando] = pendientes()
+    if (esperando) await bot(`📂 Sigo atento a tu reclamo${esperando.folio ? ` N° ${esperando.folio}` : ''} a ${esperando.empresa}. Te pregunto si respondieron desde el **${fechaCorta(sumarHabiles(esperando.enviado, PLAZO_CORTO))}**.`)
     preguntaEstado()
   }
 
@@ -67,6 +75,7 @@ export default function ChatOCN({ contar, abierto, setAbierto, verMapa }) {
       ['🔴 Sin servicio', () => { datos.current.tipo = 'caido'; preguntaServicio() }],
       ['🟡 Lento o se corta', () => { datos.current.tipo = 'lento'; preguntaServicio() }],
       ['🟢 Funciona bien', funciona],
+      ...(leerReclamos().length ? [['📂 Mis reclamos', misReclamos]] : []),
     ] })
   }
 
@@ -149,7 +158,8 @@ export default function ChatOCN({ contar, abierto, setAbierto, verMapa }) {
         latitud: d.lat ?? null, longitud: d.lon ?? null, dispositivo: dispositivo(),
       })
       guardarPerfil({ empresa: d.empresa, servicio: d.servicio, region: d.region, comuna: d.comuna || null })
-      const { enOcn, otras } = await contar(d.empresa, d.region)
+      const { enOcn, otras, porFuente } = await contar(d.empresa, d.region)
+      d.evidencia = { enOcn, otras, porFuente }
       setEscribiendo(false)
       const otros = Math.max(enOcn - 1, 0)
       await bot(
@@ -174,13 +184,68 @@ export default function ChatOCN({ contar, abierto, setAbierto, verMapa }) {
       'Te armo el reclamo formal 📝 No te pido nombre ni RUT: esos datos los completas tú y no salen de tu celular.',
       `Según SUBTEL, si el servicio se interrumpe más de 12 horas sin justificación puedes exigir una rebaja del cargo fijo, y si el corte dura más de 3 días seguidos, una compensación de 3 veces el cargo fijo diario por cada día. [Ver tus derechos en SUBTEL](${DERECHOS_SUBTEL})`,
     )
-    setMsgs((m) => [...m, { de: 'bot', reclamo: textoReclamo(d) }])
+    const texto = textoReclamo(d, new Date(), d.evidencia)
+    d.texto = texto
+    setMsgs((m) => [...m, { de: 'bot', reclamo: texto, onCambio: (v) => { d.texto = v } }])
     await bot(
-      `**Paso 1:** envíalo a ${d.empresa} por su web, su app o su teléfono de atención, y anota el **número de reclamo** que te den.`,
-      `**Paso 2:** si ${d.empresa} no responde o no te soluciona, insiste en SUBTEL con ese número. [Abrir portal de reclamos SUBTEL](${PORTAL_SUBTEL})`,
-      'Cuando lo envíes, avísame y lo sumo al contador público de reclamos contra la empresa.',
+      d.evidencia?.enOcn || d.evidencia?.otras ? 'Le agregué como **evidencia** los reportes reales que OCN registra ahora mismo sobre la falla.' : 'Completa los campos entre [ ] y elige por dónde enviarlo.',
+      '¿Por dónde lo envías? Te recomiendo **SUBTEL**: ahí también se puede presentar el reclamo contra la compañía, queda registrado con tu ClaveÚnica y te dan un número para seguirlo.',
     )
-    preguntar({ tipo: 'botones', items: [[`✅ Ya lo envié a ${d.empresa}`, sumarReclamo], ['Lo envío después', () => bot('Perfecto. El texto queda aquí arriba para copiarlo cuando quieras.')]] })
+    preguntar({ tipo: 'botones', destacado: '🏛️ Enviar por SUBTEL', items: [
+      ['🏛️ Enviar por SUBTEL', () => enviarPor('SUBTEL')],
+      [`📞 Directo a ${d.empresa}`, () => enviarPor('empresa')],
+      ['✉️ Por correo', () => enviarPor('correo')],
+      ['Lo envío después', () => bot('Perfecto. El texto queda aquí arriba. Cuando lo envíes, vuelve y toca "Mis reclamos" para que lo siga.')],
+    ] })
+  }
+
+  async function copiarTexto() {
+    try { await navigator.clipboard.writeText(datos.current.texto); return true } catch { return false }
+  }
+
+  async function enviarPor(canal) {
+    const d = datos.current
+    d.canal = canal === 'SUBTEL' ? 'portal SUBTEL' : canal === 'correo' ? 'correo electrónico' : `atención de ${d.empresa}`
+    const copiado = await copiarTexto()
+    const yaCopie = copiado ? '📋 Ya copié tu reclamo.' : '📋 Copia el texto de arriba (mantén presionado y "Copiar").'
+    if (canal === 'SUBTEL') {
+      window.open(PORTAL_SUBTEL, '_blank', 'noopener')
+      await bot(
+        `${yaCopie} Abrí el portal de reclamos de SUBTEL en otra pestaña.`,
+        '**1.** Entra con tu ClaveÚnica (o usuario y clave de SUBTEL).\n**2.** Ingresa un reclamo nuevo contra ' + d.empresa + '.\n**3.** Pega el texto en la descripción y adjunta tu boleta si la tienes.',
+        'Por ley el reclamo lo firma la persona afectada, por eso el último clic es tuyo. OCN no entra a tu cuenta ni envía nada a tu nombre.',
+      )
+    } else if (canal === 'correo') {
+      location.href = `mailto:?subject=${encodeURIComponent(`Reclamo por falla de servicio ${d.empresa}`)}&body=${encodeURIComponent(d.texto)}`
+      await bot(`${yaCopie} Abrí tu correo con el reclamo listo. Pon la dirección de reclamos que ${d.empresa} indica en su web o en tu boleta, y guarda el correo enviado como prueba.`)
+    } else {
+      await bot(`${yaCopie} Ingrésalo en la web o app de ${d.empresa}, o llama al **105** desde tu línea (canal de reclamos que indica SUBTEL). Exige siempre el **número de reclamo**.`)
+    }
+    await bot('Cuando lo envíes, escríbeme el **número de reclamo** que te den. Lo guardo solo en tu celular y te aviso cuando venza el plazo de respuesta.')
+    preguntar({ tipo: 'folio' })
+  }
+
+  async function guardarFolio(folio) {
+    const d = datos.current
+    const r = agregarReclamo({
+      empresa: d.empresa, servicio: d.servicio, servicioTexto: servicioTexto(d.servicio), region: d.region, comuna: d.comuna || null,
+      tipo: d.tipo, desde: d.desde ?? null, canal: d.canal, folio: folio || null,
+    })
+    await sumarReclamo()
+    const corto = sumarHabiles(r.enviado, PLAZO_CORTO)
+    await bot(
+      `📂 Guardado${folio ? ` el reclamo N° **${folio}**` : ''}. Según ChileAtiende, ${d.empresa} tiene hasta **${PLAZO_CORTO} días hábiles** para responder (aprox. el **${fechaCorta(corto)}**, sin contar feriados); la página de SUBTEL indica hasta ${PLAZO_LARGO} si responde por correo. [Ver ficha](${FICHA_CHILEATIENDE})`,
+      'Cuando vuelvas a OCN después de esa fecha, te pregunto si respondieron y, si no, te dejo lista la insistencia ante SUBTEL. Si quieres, agrégalo a tu calendario para no olvidarlo.',
+    )
+    preguntar({ tipo: 'botones', items: [
+      ['📅 Agregar recordatorio', async () => { descargarCalendario(r); await bot('Listo, descargué el recordatorio. Ábrelo para agregarlo a tu calendario.'); finReclamo() }],
+      ['Compartir por WhatsApp', compartir],
+      ['Ver el mapa', () => { setAbierto(false); verMapa?.() }],
+    ] })
+  }
+
+  function finReclamo() {
+    preguntar({ tipo: 'botones', items: [['Compartir por WhatsApp', compartir], ['Ver el mapa', () => { setAbierto(false); verMapa?.() }]] })
   }
 
   async function sumarReclamo() {
@@ -191,12 +256,85 @@ export default function ChatOCN({ contar, abierto, setAbierto, verMapa }) {
       const todos = await cargarReclamos(30)
       setEscribiendo(false)
       const n = todos.filter((r) => r.empresa === d.empresa).length
-      await bot(`💪 Sumado. En los últimos 30 días van **${n} reclamo${n === 1 ? '' : 's'}** contra ${d.empresa} registrados en OCN. Mientras más seamos, más difícil es ignorarnos.`)
-      preguntar({ tipo: 'botones', items: [['Compartir por WhatsApp', compartir], ['Ver el mapa', () => { setAbierto(false); verMapa?.() }]] })
+      await bot(`💪 Sumado al contador público: en los últimos 30 días van **${n} reclamo${n === 1 ? '' : 's'}** contra ${d.empresa} registrados en OCN.`)
     } catch (e) {
       setEscribiendo(false)
-      await bot(`No pude sumarlo: ${e.message}`)
+      if (!/6 horas/.test(e.message)) await bot(`No pude sumarlo al contador: ${e.message}`)
     }
+  }
+
+  async function misReclamos() {
+    const lista = leerReclamos().slice().reverse()
+    if (!lista.length) { await bot('Todavía no tienes reclamos guardados.'); preguntaEstado(); return }
+    const ESTADO = { esperando: '⏳ esperando respuesta', resuelto: '✅ solucionado', insistido: '🏛️ insistido en SUBTEL' }
+    await bot(lista.map((r) => `• **${r.empresa}**${r.folio ? ` N° ${r.folio}` : ''}, ${fechaCorta(r.enviado)}: ${ESTADO[r.estado] ?? r.estado} (${habilesEntre(r.enviado)} días hábiles)`).join('\n'))
+    const abiertos = lista.filter((r) => r.estado === 'esperando')
+    preguntar({ tipo: 'botones', items: [
+      ...abiertos.slice(0, 3).map((r) => [`Revisar ${r.empresa}${r.folio ? ` N° ${r.folio}` : ''}`, () => revisarReclamo(r)]),
+      ['Reportar un problema', preguntaEstado],
+    ] })
+  }
+
+  async function revisarReclamo(r) {
+    const n = habilesEntre(r.enviado)
+    await bot(`📂 Tu reclamo${r.folio ? ` N° **${r.folio}**` : ''} a **${r.empresa}** (${fechaCorta(r.enviado)}) lleva **${n} día${n === 1 ? '' : 's'} hábil${n === 1 ? '' : 'es'}**. ¿Te respondieron?`)
+    preguntar({ tipo: 'botones', items: [
+      ['✅ Sí, lo solucionaron', () => resultado(r, 'resuelto')],
+      ['😐 Respondieron, pero no solucionan', () => resultado(r, 'respondido_sin_solucion')],
+      ['🔇 No me han respondido', () => resultado(r, 'sin_respuesta')],
+      ['Todavía no sé', preguntaEstado],
+    ] })
+  }
+
+  async function resultado(r, res) {
+    const dias = habilesEntre(r.enviado)
+    registrarResultado({ empresa: r.empresa, resultado: res, dias_habiles: Math.min(dias, 365), dispositivo: dispositivo() }).catch(() => {})
+    if (res === 'resuelto') {
+      actualizarReclamo(r.id, { estado: 'resuelto' })
+      await bot('¡Bien! 🙌 Lo marqué como solucionado. Si el corte duró más de 3 días seguidos, igual te corresponde compensación: te ayudo a calcularla.')
+      preguntar({ tipo: 'botones', items: [['💰 Calcular compensación', () => calcular(r, null)], ['Listo', preguntaEstado]] })
+      return
+    }
+    if (res === 'sin_respuesta' && dias < PLAZO_CORTO) {
+      await bot(`Todavía está dentro del plazo (${dias} de ${PLAZO_CORTO} días hábiles). Te vuelvo a preguntar el ${fechaCorta(sumarHabiles(r.enviado, PLAZO_CORTO))}.`)
+      preguntaEstado()
+      return
+    }
+    await bot(
+      res === 'sin_respuesta' ? `${r.empresa} no cumplió. Ahora toca **insistir en SUBTEL** (segunda instancia), que resuelve en hasta 30 días.` : `Entonces toca **insistir en SUBTEL** (segunda instancia), que resuelve en hasta 30 días.`,
+      'Según SUBTEL, hay que hacerlo dentro de los 10 días hábiles siguientes. ¿El corte duró más de 3 días seguidos? Si es así, sumo el cálculo de tu compensación.',
+    )
+    preguntar({ tipo: 'botones', items: [['Sí, más de 3 días', () => calcular(r, res)], ['No', () => insistir(r, res, {})]] })
+  }
+
+  async function calcular(r, res) {
+    await bot('¿Cuánto pagas de **cargo fijo mensual** por ese servicio? (está en tu boleta) Y ¿cuántos **días seguidos** estuviste sin servicio?')
+    preguntar({ tipo: 'compensacion', r, res })
+  }
+
+  async function mostrarCompensacion(r, res, cargoMensual, dias) {
+    const c = compensacion(cargoMensual, dias)
+    if (dias > 3) await bot(`💰 Cargo diario aprox. ${pesos(c.diario)} (mensual ÷ 30). Por ${dias} días seguidos sin servicio, la compensación sería cerca de **${pesos(c.total)}** (3 veces el cargo diario por día, según SUBTEL). Es una estimación: el monto final lo calcula la empresa o SUBTEL.`)
+    else await bot('Con 3 días o menos no aplica la compensación triple, pero si el corte pasó de 12 horas puedes pedir la rebaja del cargo fijo.')
+    if (res) insistir(r, res, { cargoMensual, dias })
+    else preguntar({ tipo: 'botones', items: [['Listo', preguntaEstado]] })
+  }
+
+  async function insistir(r, res, extra) {
+    const texto = textoInsistencia(r, { motivo: res, ...extra })
+    datos.current.texto = texto
+    setMsgs((m) => [...m, { de: 'bot', reclamo: texto, titulo: 'Insistencia ante SUBTEL', onCambio: (v) => { datos.current.texto = v } }])
+    await bot('Te dejé la insistencia lista, con tu número de reclamo. Completa los campos entre [ ] y envíala en el portal de SUBTEL.')
+    preguntar({ tipo: 'botones', destacado: '🏛️ Copiar y abrir SUBTEL', items: [
+      ['🏛️ Copiar y abrir SUBTEL', async () => {
+        const ok = await copiarTexto()
+        window.open(PORTAL_SUBTEL, '_blank', 'noopener')
+        actualizarReclamo(r.id, { estado: 'insistido' })
+        await bot(`${ok ? '📋 Copiado.' : '📋 Copia el texto de arriba.'} En SUBTEL entra con tu ClaveÚnica, ingresa el reclamo contra ${r.empresa}, pega el texto y adjunta la respuesta de la empresa si la hubo. Guarda el número que te dé SUBTEL.`)
+        finReclamo()
+      }],
+      ['Lo hago después', () => bot('El texto queda aquí arriba. Lo encuentras de nuevo en "Mis reclamos".').then(preguntaEstado)],
+    ] })
   }
 
   function compartir() {
@@ -219,7 +357,7 @@ export default function ChatOCN({ contar, abierto, setAbierto, verMapa }) {
       </header>
       <div className="chat-hilo" aria-live="polite">
         {msgs.map((m, i) => m.reclamo
-          ? <TarjetaReclamo key={i} texto={m.reclamo} />
+          ? <TarjetaReclamo key={i} texto={m.reclamo} titulo={m.titulo} onCambio={m.onCambio} />
           : <p key={i} className={`burb ${m.de}`} dangerouslySetInnerHTML={{ __html: negrita(m.t) }} />)}
         {escribiendo && <p className="burb bot puntos" aria-label="escribiendo"><i /><i /><i /></p>}
         {opciones?.tipo === 'botones' && (
@@ -251,6 +389,33 @@ export default function ChatOCN({ contar, abierto, setAbierto, verMapa }) {
             <button type="button" className="saltar" onClick={() => { datos.current.comuna = null; responder(opciones.saltar, preguntaDesde) }}>{opciones.saltar}</button>
           </form>
         )}
+        {opciones?.tipo === 'folio' && (
+          <form className="chat-texto" onSubmit={(e) => {
+            e.preventDefault()
+            const v = new FormData(e.currentTarget).get('f')?.toString().trim().slice(0, 40)
+            if (!v) return
+            setOpciones(null); yo(`N° ${v}`); guardarFolio(v)
+          }}>
+            <input name="f" placeholder="N° de reclamo" maxLength={40} autoFocus autoComplete="off" />
+            <button type="submit" aria-label="Guardar">➤</button>
+            <button type="button" className="saltar" onClick={() => { setOpciones(null); yo('No me dieron número'); guardarFolio(null) }}>No me dieron número</button>
+          </form>
+        )}
+        {opciones?.tipo === 'compensacion' && (
+          <form className="chat-texto chat-comp" onSubmit={(e) => {
+            e.preventDefault()
+            const f = new FormData(e.currentTarget)
+            const cargo = Number(String(f.get('c')).replace(/\D/g, ''))
+            const dias = Number(f.get('d'))
+            if (!(cargo > 0) || !(dias > 0)) return
+            const { r, res } = opciones
+            setOpciones(null); yo(`${pesos(cargo)} al mes, ${dias} día${dias === 1 ? '' : 's'}`); mostrarCompensacion(r, res, cargo, dias)
+          }}>
+            <input name="c" inputMode="numeric" placeholder="Cargo mensual $" maxLength={9} autoFocus />
+            <input name="d" type="number" min="1" max="60" inputMode="numeric" placeholder="Días" />
+            <button type="submit" aria-label="Calcular">➤</button>
+          </form>
+        )}
         <div ref={fin} />
       </div>
       <p className="nota chat-nota">OCN no guarda tu IP ni tu ubicación exacta.</p>
@@ -266,15 +431,16 @@ function negrita(t) {
     .replace(/\[([^\]]+)\]\((https:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>')
 }
 
-function TarjetaReclamo({ texto }) {
-  const [valor, setValor] = useState(texto)
+function TarjetaReclamo({ texto, titulo = 'Tu reclamo', onCambio }) {
+  const [valor, setValorLocal] = useState(texto)
+  const setValor = (v) => { setValorLocal(v); onCambio?.(v) }
   const [copiado, setCopiado] = useState(false)
   async function copiar() {
     try { await navigator.clipboard.writeText(valor); setCopiado(true); setTimeout(() => setCopiado(false), 2000) } catch { /* el usuario puede seleccionar a mano */ }
   }
   return (
     <div className="reclamo-carta">
-      <div className="reclamo-cab"><b>Tu reclamo</b><small>Completa los campos entre [ ]</small></div>
+      <div className="reclamo-cab"><b>{titulo}</b><small>Completa los campos entre [ ]</small></div>
       <textarea value={valor} onChange={(e) => setValor(e.target.value)} rows={12} aria-label="Texto del reclamo" />
       <div className="reclamo-botones">
         <button onClick={copiar}>{copiado ? '✓ Copiado' : '📋 Copiar'}</button>

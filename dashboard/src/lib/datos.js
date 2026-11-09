@@ -222,8 +222,10 @@ export function contarSimilares(vecinos, filas, empresa, region) {
   const r = sinTilde(region)
   const k = claveEmpresa(empresa)
   const enOcn = vecinos.filter((v) => v.empresa === empresa && sinTilde(v.region) === r && Date.parse(v.creado_en) > hace1h).length
-  const otras = ultimos(filas)
-    .filter((f) => f.fuente !== 'ocn' && sinTilde(f.region) === r && claveEmpresa(f.empresa) === k)
-    .reduce((s, f) => s + (f.cantidad_reportes ?? 0), 0)
-  return { enOcn, otras }
+  const externas = ultimos(filas).filter((f) => f.fuente !== 'ocn' && sinTilde(f.region) === r && claveEmpresa(f.empresa) === k)
+  const otras = externas.reduce((s, f) => s + (f.cantidad_reportes ?? 0), 0)
+  // Desglose por fuente, para citar la evidencia en el reclamo.
+  const porFuente = {}
+  for (const f of externas) if (f.cantidad_reportes > 0) porFuente[f.fuente] = (porFuente[f.fuente] ?? 0) + f.cantidad_reportes
+  return { enOcn, otras, porFuente }
 }
