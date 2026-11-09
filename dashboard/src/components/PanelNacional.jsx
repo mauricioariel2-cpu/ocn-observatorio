@@ -1,6 +1,8 @@
 const ETIQUETA = { falla_masiva: 'Falla masiva', posibles_problemas: 'Posibles problemas', normal: 'Normal' }
 
-const FUENTE = { geoblackout: 'Geoblackout', fallacl: 'FallaCL', ioda: 'IODA', downdetector: 'Downdetector' }
+import { FUENTES_TOTALES } from '../lib/datos'
+
+const FUENTE = { geoblackout: 'Geoblackout', fallacl: 'FallaCL', ioda: 'IODA', blackoutmap: 'Blackout Map', downdetector: 'Downdetector' }
 const nombres = (set) => [...set].map((f) => FUENTE[f] ?? f).join(' + ')
 
 export default function PanelNacional({ comunas, paises, nacional, tri, actualizado, error, abierto, alternar }) {
@@ -23,11 +25,11 @@ export default function PanelNacional({ comunas, paises, nacional, tri, actualiz
           {verif.map((e) => (
             <li key={e.empresa} className={e.confirmado ? 'falla_masiva' : 'sin-confirmar'}>
               <span>{e.empresa}<small>{e.confirmado ? '✓ Confirmada' : 'Sin confirmar'} · {nombres(e.fuentes)}</small></span>
-              <b>{e.fuentes.size}/3</b>
+              <b>{e.fuentes.size}/{FUENTES_TOTALES}</b>
             </li>
           ))}
         </ul>
-        <p className="pie">Una falla se marca como confirmada solo si al menos 2 de 3 fuentes independientes la reportan en la última hora: reportes ciudadanos (Geoblackout, FallaCL) y mediciones de red (IODA).</p>
+        <p className="pie">Una falla se marca como confirmada solo si al menos 2 fuentes independientes la reportan en la última hora: reportes ciudadanos (Geoblackout, FallaCL) y mediciones de red (IODA, sondas de Blackout Map).</p>
 
         <h2>Zonas afectadas en Chile</h2>
         {comunas.filter((c) => c.pais === 'CL').length === 0 && (
@@ -47,7 +49,7 @@ export default function PanelNacional({ comunas, paises, nacional, tri, actualiz
         <ul className="lista">
           {nacional.map((f) => (
             <li key={f.id ?? `${f.fuente}-${f.empresa}`} className={f.gravedad}>
-              <span>{f.empresa}<small>{ETIQUETA[f.gravedad] ?? 's/i'} · {f.fuente}</small></span>
+              <span>{f.empresa}<small>{ETIQUETA[f.gravedad] ?? 's/i'} · {FUENTE[f.fuente] ?? f.fuente}{f.fuente === 'blackoutmap' || f.fuente === 'ioda' ? ` · ${f.gravedad_texto}` : ''}</small></span>
               <b>{f.cantidad_reportes ?? '–'}</b>
             </li>
           ))}
@@ -68,7 +70,7 @@ export default function PanelNacional({ comunas, paises, nacional, tri, actualiz
           <i className="falla_masiva" /> Falla masiva <i className="posibles_problemas" /> Posibles problemas <i className="sin-confirmar" /> Sin confirmar
         </p>
         <p className="pie">
-          Actualizado {actualizado ? actualizado.toLocaleTimeString('es-CL') : '…'} · Fuentes: Geoblackout, FallaCL e IODA (Georgia Tech, datos © Georgia Tech Research Corporation)
+          Actualizado {actualizado ? actualizado.toLocaleTimeString('es-CL') : '…'} · Fuentes: Geoblackout, FallaCL, IODA (© Georgia Tech Research Corporation) y <a href="https://blackoutmap.net" target="_blank" rel="noreferrer">Blackout Map</a> (CC BY-NC 4.0)
         </p>
       </div>
     </aside>

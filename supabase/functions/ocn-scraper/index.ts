@@ -8,6 +8,10 @@
 //  · IODA (Georgia Tech, api.ioda.inetintel.cc.gatech.edu): mediciones objetivas de
 //    la red (BGP, ping a /24, telescopio). No son reportes de usuarios: detecta caídas
 //    por operador (sistema autónomo), por región y del país completo.
+//  · Blackout Map (blackoutmap.net, robots: Allow /, Crawl-delay 1; datos CC BY-NC 4.0,
+//    citar "Blackout Map"): sus propios puntos de prueba DENTRO de la red de cada operador
+//    chileno (ping cada 5 min) y reportes de usuarios de la última hora. Regiones de
+//    status.json medidas por sus sondas.
 // Downdetector no se incluye: su robots.txt prohíbe la página de DIRECTV.
 //
 // Variables que Supabase ya pone solas en toda función: SUPABASE_URL y
@@ -18,6 +22,7 @@ const FUENTE_URL = "https://geoblackout.com/cl/report/internet";
 const FALLACL_URL = "https://fallacl.cl";
 const IODA_API = "https://api.ioda.inetintel.cc.gatech.edu/v2";
 const IODA_VENTANA_H = 3;
+const BLACKOUT_URL = "https://blackoutmap.net";
 const VENTANA_HORAS = 3;
 const MIN_ENTRE_CORRIDAS_MIN = 10; // freno anti-abuso: no scrapea más seguido que esto
 
@@ -87,6 +92,9 @@ const REGIONES: Record<string, [string, number, number]> = {
   "aysen": ["Aysén", -45.5712, -72.0685],
   "aisen": ["Aysén", -45.5712, -72.0685],
   "higgins": ["O'Higgins", -34.1708, -70.7444],
+  "santiago": ["Metropolitana", -33.4489, -70.6693],
+  "bio-bio": ["Biobío", -36.8270, -73.0503],
+  "bio bio": ["Biobío", -36.8270, -73.0503],
   "magallanes": ["Magallanes", -53.1638, -70.9171],
 };
 const CENTRO_PAIS: [number, number] = [-33.4489, -70.6693];
@@ -338,6 +346,64 @@ export async function parsearIoda(alertas: AlertaIoda[], ahora = new Date()): Pr
   return filas;
 }
 
+// ---------- Blackout Map ----------
+const PROVEEDORES_BM: Record<string, string> = {
+  "movistar-chile": "Movistar", "entel-chile": "Entel", "vtr": "VTR", "mundo": "Mundo", "wom-chile": "WOM",
+};
+
+// Lee "12 of 12 test points inside X's network answer" y "0 people reported a problem in the last hour".
+export function leerProveedorBM(html: string) {
+  const t = html.replace(/<script[\s\S]*?<\/script>/gi, " ").replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<[^>]+>/g, " ").replace(/&#0?39;|&#x27;/g, "'").replace(/\s+/g, " ");
+  const p = t.match(/(\d+) of (\d+) test points inside/);
+  const r = t.match(/(\d+) (?:people|person) reported a problem in the last hour/);
+  if (!p) return null;
+  return { arriba: Number(p[1]), total: Number(p[2]), reportes: r ? Number(r[1]) : null };
+}
+
+export function gravedadBM(arriba: number, total: number, reportes: number | null) {
+  const frac = total > 0 ? arriba / total : 1;
+  if (frac < 0.5) return "falla_masiva";
+  if (frac < 0.9 || (reportes ?? 0) >= 5) return "posibles_problemas";
+  return "normal";
+}
+
+export async function filaProveedorBM(slug: string, html: string, ahora = new Date()): Promise<Fila | null> {
+  const d = leerProveedorBM(html);
+  const empresa = PROVEEDORES_BM[slug];
+  if (!d || !empresa) return null;
+  const ventana = ventana15(ahora);
+  const base = {
+    fuente: "blackoutmap", pais: "CL", empresa, servicio: "internet", comuna: null, region: null,
+    latitud: CENTRO_PAIS[0], longitud: CENTRO_PAIS[1], precision_geo: "pais",
+    cantidad_reportes: d.reportes, gravedad: gravedadBM(d.arriba, d.total, d.reportes),
+    gravedad_texto: `${d.arriba} de ${d.total} puntos de prueba en la red responden` +
+      (d.reportes != null ? ` · ${d.reportes} reporte(s) en la última hora` : ""),
+    url_fuente: `${BLACKOUT_URL}/providers/${slug}`, ventana, raw: { slug, ...d },
+  };
+  return { ...base, hash_dedup: await hash(["blackoutmap", slug, ventana]) };
+}
+
+const NIVEL_BM: Record<string, string> = { blackout: "falla_masiva", partial: "falla_masiva", degraded: "posibles_problemas" };
+
+export async function filasRegionesBM(status: { regions?: { cc: string; region: string; s: string; up: number; n: number; since?: string }[] }, ahora = new Date()) {
+  const ventana = ventana15(ahora);
+  const filas: Fila[] = [];
+  for (const r of status?.regions ?? []) {
+    if (r.cc !== "CL" || !NIVEL_BM[r.s]) continue;
+    const reg = regionDe(r.region);
+    if (!reg) continue;
+    const base = {
+      fuente: "blackoutmap", pais: "CL", empresa: "Red completa", servicio: "internet", comuna: null, region: reg[0],
+      latitud: reg[1], longitud: reg[2], precision_geo: "region", cantidad_reportes: null, gravedad: NIVEL_BM[r.s],
+      gravedad_texto: `Blackout Map: ${r.up} de ${r.n} sondas responden (${r.s})` + (r.since ? ` desde ${r.since.slice(11, 16)} UTC` : ""),
+      url_fuente: `${BLACKOUT_URL}/country/chile`, ventana, raw: r,
+    };
+    filas.push({ ...base, hash_dedup: await hash(["blackoutmap", "region", r.region, ventana]) });
+  }
+  return filas;
+}
+
 async function rest(path: string, init: RequestInit = {}) {
   const url = Deno.env.get("SUPABASE_URL")!;
   const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -393,6 +459,21 @@ async function filasIoda(): Promise<Fila[]> {
   return parsearIoda(alertas);
 }
 
+const pausa = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+async function filasBlackoutMap(): Promise<Fila[]> {
+  const filas: Fila[] = [];
+  for (const slug of Object.keys(PROVEEDORES_BM)) {
+    const r = await fetch(`${BLACKOUT_URL}/providers/${slug}`, { headers: cabeceras("text/html") });
+    if (r.ok) { const f = await filaProveedorBM(slug, await r.text()); if (f) filas.push(f); }
+    await pausa(1100); // Crawl-delay: 1
+  }
+  const st = await fetch(`${BLACKOUT_URL}/data/status.json`, { headers: cabeceras("application/json") });
+  if (st.ok) filas.push(...await filasRegionesBM(await st.json()));
+  if (!filas.length) throw new Error("Blackout Map sin datos; ¿cambió la página?");
+  return filas;
+}
+
 async function corrida(): Promise<Record<string, unknown>> {
   // Freno: si hubo una captura hace menos de 10 min, no volvemos a pedir las páginas.
   const ult = await rest("reportes_caidas?select=capturado_en&order=capturado_en.desc&limit=1");
@@ -402,7 +483,7 @@ async function corrida(): Promise<Record<string, unknown>> {
   const res: Record<string, unknown> = {};
   const filas: Fila[] = [];
   // Cada fuente va por separado: si una falla, la otra igual se guarda.
-  for (const [nombre, fn] of [["geoblackout", filasGeoblackout], ["fallacl", filasFallacl], ["ioda", filasIoda]] as const) {
+  for (const [nombre, fn] of [["geoblackout", filasGeoblackout], ["fallacl", filasFallacl], ["ioda", filasIoda], ["blackoutmap", filasBlackoutMap]] as const) {
     try {
       const f = await fn();
       filas.push(...f);

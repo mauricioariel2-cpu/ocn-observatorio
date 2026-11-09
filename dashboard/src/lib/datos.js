@@ -124,7 +124,7 @@ export function estadoNacional(filas, pais = 'CL') {
 // Con una sola fuente se muestra como "sin confirmar". Nunca se inventan datos:
 // todo lo que se ve sale de filas reales de reportes_caidas, con su enlace de origen.
 export const MIN_FUENTES = 2
-export const FUENTES_TOTALES = 3 // Geoblackout, FallaCL, IODA
+export const FUENTES_TOTALES = 4 // Geoblackout, FallaCL, IODA, Blackout Map
 const VENTANA_CRUCE_MIN = 60
 
 export function claveEmpresa(nombre) {

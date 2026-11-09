@@ -2,11 +2,11 @@ import { useEffect, useMemo, useState } from 'react'
 import L from 'leaflet'
 import { MapContainer, Marker, Popup, TileLayer, ZoomControl, useMap, useMapEvents } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
-import { puntosRegion, verifDe } from '../lib/datos'
+import { FUENTES_TOTALES, puntosRegion, verifDe } from '../lib/datos'
 import { VISTAS, nivelPorZoom } from '../lib/geo'
 
 const SERVICIO = { internet_fijo: 'Internet hogar', internet_movil: 'Internet móvil', tv: 'TV', internet: 'Internet', telefonia_fija: 'Telefonía', streaming: 'Streaming', banca: 'Banca' }
-const FUENTE = { geoblackout: 'Geoblackout', fallacl: 'FallaCL', ioda: 'IODA (Georgia Tech)', downdetector: 'Downdetector' }
+const FUENTE = { geoblackout: 'Geoblackout', fallacl: 'FallaCL', ioda: 'IODA (Georgia Tech)', blackoutmap: 'Blackout Map', downdetector: 'Downdetector' }
 
 function hace(iso) {
   const min = Math.round((Date.now() - Date.parse(iso)) / 60000)
@@ -113,13 +113,13 @@ export default function MapaCaidas({ comunas, paises, vista, nuevos, tri }) {
                       <small className="origen">
                         {e.gravedad !== 'normal' && (
                           <span className={v.confirmado ? 'sello ok' : 'sello'}>
-                            {v.confirmado ? `✓ Confirmado por ${v.fuentes.size} de 3 fuentes` : e.empresa === 'Red completa' ? 'Medición de red' : 'Sin confirmar (1 de 3 fuentes)'}
+                            {v.confirmado ? `✓ Confirmado por ${v.fuentes.size} de ${FUENTES_TOTALES} fuentes` : e.empresa === 'Red completa' ? 'Medición de red' : `Sin confirmar (1 de ${FUENTES_TOTALES} fuentes)`}
                           </span>
                         )}
                         {' '}Fuente: {e.url_fuente
                           ? <a href={e.url_fuente} target="_blank" rel="noreferrer">{FUENTE[e.fuente] ?? e.fuente}</a>
                           : (FUENTE[e.fuente] ?? e.fuente)} · {hace(e.capturado_en ?? e.ventana)}
-                        {e.fuente === 'ioda' && <><br />{e.gravedad_texto}</>}
+                        {(e.fuente === 'ioda' || e.fuente === 'blackoutmap') && <><br />{e.gravedad_texto}</>}
                         {e.precision_geo === 'region' && e.fuente === 'fallacl' && ' · ubicación aproximada (región del último reporte)'}
                       </small>
                     </li>
