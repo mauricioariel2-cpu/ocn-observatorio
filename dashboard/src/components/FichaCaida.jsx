@@ -70,7 +70,7 @@ export default function FichaCaida({ slug, cerrar, todas, tri, idxLuz, reportar 
               <div><dt>Desde</dt><dd>{hora(ficha.inicio)}<small>primera señal registrada</small></dd></div>
               <div><dt>{ficha.activa ? 'Lleva' : 'Duró'}</dt><dd>{duracionTexto(ficha.duracionMin)}<small>{ficha.activa ? `última señal ${horaCorta(ficha.fin)}` : `hasta ${horaCorta(ficha.fin)}`}</small></dd></div>
               <div><dt>Alcance</dt><dd>{alc?.texto ?? '—'}<small>{ficha.regiones.slice(0, 4).join(', ') || (ficha.nacional ? 'nivel país' : '')}</small></dd></div>
-              {ficha.pico.n > 0 && <div><dt>Punto más alto</dt><dd>{ficha.pico.n} reportes<small>sumando fuentes, a las {horaCorta(ficha.pico.t)}</small></dd></div>}
+              {ficha.pico.n > 0 && <div><dt>Punto más alto</dt><dd>{ficha.pico.n} reportes<small>sumando lugares y fuentes, a las {horaCorta(ficha.pico.t)}</small></dd></div>}
             </dl>
 
             {causa && (
