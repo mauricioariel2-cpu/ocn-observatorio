@@ -141,6 +141,7 @@ export function triangular(filas, ahora = Date.now()) {
   for (const f of filas) {
     if (f.gravedad === 'normal' || !f.gravedad) continue
     if (f.empresa === 'Red completa') continue // medición de toda la red, no de una empresa
+    if (!esTelecom(f)) continue // apps (bancos, Microsoft 365…) no son caídas de internet
     const t = Date.parse(f.capturado_en ?? f.ventana)
     if (Number.isFinite(t) && t < limite) continue
     const k = `${paisDe(f)}|${claveEmpresa(f.empresa)}`

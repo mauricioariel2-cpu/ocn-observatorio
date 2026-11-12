@@ -88,7 +88,7 @@ export function armarFicha(slug, historial, extras = [], ahora = Date.now()) {
   const linea = []
   for (let b = Math.max(primero, ultimo - 95); b <= ultimo; b++) {
     const m = bloques.get(b)
-    linea.push({ t: b * BLOQUE_MIN * 60_000, n: m ? [...m.values()].reduce((s, x) => s + x.n, 0) : 0, señal: !!m })
+    linea.push({ t: b * BLOQUE_MIN * 60_000, n: m ? sumarBloque(m) : 0, señal: !!m })
   }
   const pico = linea.reduce((a, x) => (x.n > a.n ? x : a), { n: 0, t: null })
 
@@ -98,6 +98,20 @@ export function armarFicha(slug, historial, extras = [], ahora = Date.now()) {
     fuentes: [...fuentes.values()].sort((a, b) => b.senales - a.senales),
     linea, pico, filas: episodio,
   }
+}
+
+// Suma de un bloque sin contar dos veces: si una fuente da un total nacional y además el detalle por lugar,
+// se usa el mayor de los dos (no la suma).
+function sumarBloque(m) {
+  const porFuente = new Map()
+  for (const [k, x] of m) {
+    const [fuente, comuna, region] = k.split('|')
+    const e = porFuente.get(fuente) ?? { nacional: 0, lugares: 0 }
+    if (!comuna && !region) e.nacional = Math.max(e.nacional, x.n)
+    else e.lugares += x.n
+    porFuente.set(fuente, e)
+  }
+  return [...porFuente.values()].reduce((s, e) => s + Math.max(e.nacional, e.lugares), 0)
 }
 
 export function duracionTexto(min) {
