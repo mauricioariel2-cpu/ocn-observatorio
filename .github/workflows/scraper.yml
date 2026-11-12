@@ -1,8 +1,10 @@
 name: OCN scraper
 
 on:
-  schedule:
-    - cron: "*/15 * * * *"   # cada 15 min (UTC). GitHub puede retrasarlo unos minutos.
+  # Respaldo: el recolector principal corre en Supabase (pg_cron + Edge Function).
+  # Para activarlo aquí, agrega los secrets y descomenta:
+  # schedule:
+  #   - cron: "*/15 * * * *"
   workflow_dispatch: {}       # botón "Run workflow" para probar a mano
 
 concurrency:
