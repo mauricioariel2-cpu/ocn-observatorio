@@ -29,11 +29,8 @@ jobs:
           cache: npm
           cache-dependency-path: dashboard/package-lock.json
       - run: npm ci
+      # Usa dashboard/.env.production (URL y anon key públicas de Supabase).
       - run: npm run build
-        env:
-          # La anon key es pública (RLS solo permite leer). Igual se guarda como secret para no repetirla.
-          VITE_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          VITE_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dashboard/dist
