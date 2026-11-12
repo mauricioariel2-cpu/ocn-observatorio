@@ -1,9 +1,8 @@
 name: Publicar mapa (GitHub Pages)
 
+# Solo manual: la dirección de GitHub Pages incluye el nombre de usuario de la cuenta.
+# La web se publica en Cloudflare Pages (conectado a este repositorio).
 on:
-  push:
-    branches: [main]
-    paths: ["dashboard/**", ".github/workflows/pages.yml"]
   workflow_dispatch: {}
 
 permissions:
