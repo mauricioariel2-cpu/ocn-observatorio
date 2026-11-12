@@ -7,6 +7,7 @@ import Estadisticas from './components/Estadisticas'
 import CortesLuz from './components/CortesLuz'
 import Privacidad from './components/Privacidad'
 import { cargarCortesLuz } from './lib/luz'
+import { indiceLuz } from './lib/causa'
 import { PAISES, REGIONES_CL, VISTAS_PAIS } from './lib/geo'
 import { cargarReportes, cargarVecinos, coincidencias, contarSimilares, escucharNuevos, estadoNacional, mezclar, puntosComuna, puntosPais, resumirVecinos, semaforoRegiones, triangular } from './lib/datos'
 
@@ -86,6 +87,7 @@ export default function App() {
   const paises = useMemo(() => puntosPais(todas), [todas])
   const nacional = useMemo(() => estadoNacional(todas, 'CL'), [todas])
   const tri = useMemo(() => triangular(todas), [todas])
+  const idxLuz = useMemo(() => indiceLuz(luz.comunas), [luz])
 
   const semaforo = useMemo(() => semaforoRegiones(comunas, REGIONES_CL, tri), [comunas, tri])
   const enRojo = semaforo.filter((r) => r.gravedad === 'falla_masiva').length
@@ -166,7 +168,7 @@ export default function App() {
       )}
       {enMapa && (
       <main className="contenido">
-        <MapaCaidas comunas={comunas} paises={paises} vista={vista} nuevos={nuevos} tri={tri}
+        <MapaCaidas comunas={comunas} paises={paises} vista={vista} nuevos={nuevos} tri={tri} todas={todas} idxLuz={idxLuz}
           luz={luz.comunas} capaLuz={capaLuz} alternarLuz={() => setCapaLuz((c) => !c)}
           meAfecta={(region) => setReporte({ abierto: true, region: region ?? '' })} />
         <PanelNacional
@@ -174,6 +176,8 @@ export default function App() {
           paises={paises}
           nacional={nacional}
           tri={tri}
+          todas={todas}
+          idxLuz={idxLuz}
           actualizado={actualizado}
           error={error}
           abierto={panelAbierto}

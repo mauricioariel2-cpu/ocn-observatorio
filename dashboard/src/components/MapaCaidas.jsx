@@ -4,6 +4,7 @@ import { CircleMarker, GeoJSON, MapContainer, Marker, Popup, TileLayer, Tooltip,
 import 'leaflet/dist/leaflet.css'
 import { FUENTES_TOTALES, puntosRegion, verifDe } from '../lib/datos'
 import { REGIONES_CL, VISTAS, nivelPorZoom, paisDeVista } from '../lib/geo'
+import { ICONO_CAUSA, causaDePunto, indiceLuz } from '../lib/causa'
 import { COLOR_ESTADO, TEXTO_ESTADO, cargarContornos, cargarEstadoPaises, nombrePais } from '../lib/mundo'
 
 const SERVICIO = { internet_fijo: 'Internet hogar', internet_movil: 'Internet móvil', tv: 'TV', internet: 'Internet', telefonia_fija: 'Telefonía', streaming: 'Streaming', banca: 'Banca' }
@@ -82,12 +83,23 @@ function CapaMundo() {
   )
 }
 
+// Etiqueta "causa probable" (ver lib/causa.js). Nunca afirma: dice lo más probable y cita la evidencia.
+export function Causa({ c, extra }) {
+  if (!c) return null
+  return (
+    <div className={`causa causa-${c.tipo}`}>
+      <b>{ICONO_CAUSA[c.tipo]} {c.texto}</b>{extra && <span className="causa-alcance"> · {extra}</span>}
+      <small>{c.evidencia}</small>
+    </div>
+  )
+}
+
 function SeguirZoom({ alCambiar }) {
   const map = useMapEvents({ zoomend: () => alCambiar(map.getZoom()) })
   return null
 }
 
-export default function MapaCaidas({ comunas, paises, vista, nuevos, tri, meAfecta, luz = [], capaLuz = false, alternarLuz }) {
+export default function MapaCaidas({ comunas, paises, vista, nuevos, tri, todas = [], idxLuz = indiceLuz([]), meAfecta, luz = [], capaLuz = false, alternarLuz }) {
   const [zoom, setZoom] = useState(4)
   const nivel = nivelPorZoom(zoom)
   const puntos = useMemo(() => {
@@ -179,6 +191,7 @@ export default function MapaCaidas({ comunas, paises, vista, nuevos, tri, meAfec
               <strong>{p.titulo}</strong>
               {p.subtitulo && <span className="popup-sub">{p.subtitulo}</span>}
               <div className="popup-total">{p.total ? `${p.total} reportes` : 'Caída medida en la red'}</div>
+              <Causa c={causaDePunto(p.detalle, todas, idxLuz, tri)} />
               <ul>
                 {p.detalle.map((e) => {
                   const v = verifDe(tri, e)

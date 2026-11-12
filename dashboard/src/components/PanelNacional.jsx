@@ -2,13 +2,14 @@ const ETIQUETA = { falla_masiva: 'Falla masiva', posibles_problemas: 'Posibles p
 
 import { FUENTES_TOTALES, semaforoRegiones } from '../lib/datos'
 import { REGIONES_CL } from '../lib/geo'
+import { ICONO_CAUSA, alcance, causaDeEmpresa, indiceLuz } from '../lib/causa'
 
 const LUZ = { falla_masiva: 'Rojo', posibles_problemas: 'Amarillo', normal: 'Verde' }
 
 const FUENTE = { geoblackout: 'Geoblackout', fallacl: 'FallaCL', ioda: 'IODA', blackoutmap: 'Blackout Map', atlas: 'RIPE Atlas', ocn: 'Vecinos OCN', downdetector: 'Downdetector' }
 const nombres = (set) => [...set].map((f) => FUENTE[f] ?? f).join(' + ')
 
-export default function PanelNacional({ comunas, paises, nacional, tri, actualizado, error, abierto, alternar }) {
+export default function PanelNacional({ comunas, paises, nacional, tri, todas = [], idxLuz = indiceLuz([]), actualizado, error, abierto, alternar }) {
   const totalChile = paises.find((p) => p.pais === 'CL')?.total ?? 0
   const verif = [...tri.values()].filter((e) => e.pais === 'CL').sort((a, b) => b.fuentes.size - a.fuentes.size)
   return (
@@ -27,11 +28,14 @@ export default function PanelNacional({ comunas, paises, nacional, tri, actualiz
         <ul className="lista">
           {verif.map((e) => (
             <li key={e.empresa} className={e.confirmado ? 'falla_masiva' : 'sin-confirmar'}>
-              <span>{e.empresa}<small>{e.confirmado ? '✓ Confirmada' : 'Sin confirmar'} · {nombres(e.fuentes)}</small></span>
+              <span>{e.empresa}<small>{e.confirmado ? '✓ Confirmada' : 'Sin confirmar'} · {nombres(e.fuentes)}</small>
+                <CausaCorta c={causaDeEmpresa(e.empresa, e.pais, todas, idxLuz, tri)} a={alcance(todas, e.empresa, e.pais)} />
+              </span>
               <b>{e.fuentes.size}/{FUENTES_TOTALES}</b>
             </li>
           ))}
         </ul>
+        <p className="pie">Causa probable: ⚡ corte de luz informado por la SEC en el mismo lugar · 📡 sondas dentro de la red de la compañía miden la caída · 👥 solo reportes de personas. Es una estimación con datos reales, no una afirmación.</p>
         <p className="pie">Una falla se marca como confirmada solo si al menos 2 fuentes independientes la reportan en la última hora: reportes ciudadanos (Geoblackout, FallaCL, vecinos en OCN) y mediciones de red (IODA, sondas de Blackout Map y de RIPE Atlas).</p>
 
         <h2>Semáforo por región</h2>
@@ -76,4 +80,9 @@ export default function PanelNacional({ comunas, paises, nacional, tri, actualiz
       </div>
     </aside>
   )
+}
+
+function CausaCorta({ c, a }) {
+  if (!c) return null
+  return <small className={`causa-corta causa-${c.tipo}`} title={c.evidencia}>{ICONO_CAUSA[c.tipo]} {c.texto}{a ? ` · ${a.texto}` : ''}</small>
 }
