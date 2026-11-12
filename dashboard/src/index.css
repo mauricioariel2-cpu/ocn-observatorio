@@ -611,3 +611,4 @@ button.kpi-chip { font: inherit; font-size: 13px; cursor: pointer; }
 .lista li small.causa-corta { display: block; margin-top: 2px; }
 .lista li small.causa-corta.causa-luz, .lista li small.causa-corta.causa-luz_region { color: #7fd0f8; }
 .lista li small.causa-corta.causa-red { color: #ff8a8d; }
+.trampa { position: absolute !important; left: -9999px !important; width: 1px; height: 1px; opacity: 0; pointer-events: none; }

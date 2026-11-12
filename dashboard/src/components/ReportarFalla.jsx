@@ -26,9 +26,13 @@ export default function ReportarFalla({ abierto, cerrar, regionInicial, alEnviar
   const [comuna, setComuna] = useState(recordado?.comuna ?? '')
   const [coords, setCoords] = useState(null)
   const [estado, setEstado] = useState({ tipo: 'idle' })
+  // Antibots: un campo trampa invisible (las personas no lo ven ni lo llenan) y un tiempo mínimo
+  // desde que se abre el formulario. Además, la base de datos limita a 1 reporte cada 30 min por dispositivo.
+  const [trampa, setTrampa] = useState('')
+  const [abiertoEn, setAbiertoEn] = useState(0)
 
   useEffect(() => {
-    if (abierto) { setEstado({ tipo: 'idle' }); if (regionInicial) setRegion(regionInicial) }
+    if (abierto) { setEstado({ tipo: 'idle' }); setTrampa(''); setAbiertoEn(Date.now()); if (regionInicial) setRegion(regionInicial) }
   }, [abierto, regionInicial])
 
   if (!abierto) return null
@@ -56,6 +60,7 @@ export default function ReportarFalla({ abierto, cerrar, regionInicial, alEnviar
   async function enviar(e) {
     e.preventDefault()
     if (!empresa || !region) return setEstado({ tipo: 'error', msg: 'Elige tu compañía y tu región.' })
+    if (trampa || Date.now() - abiertoEn < 1500) return setEstado({ tipo: 'error', msg: 'Espera un segundo y vuelve a intentarlo.' })
     aceptar()
     setEstado({ tipo: 'enviando' })
     try {
@@ -73,6 +78,7 @@ export default function ReportarFalla({ abierto, cerrar, regionInicial, alEnviar
     <div className="modal-fondo" role="dialog" aria-modal="true" aria-labelledby="titulo-reporte" onClick={cerrar}>
       <form className="modal" onClick={(e) => e.stopPropagation()} onSubmit={enviar}>
         <h2 id="titulo-reporte">¿Se te cayó el servicio?</h2>
+        <input className="trampa" type="text" name="sitio_web" tabIndex={-1} autoComplete="off" aria-hidden="true" value={trampa} onChange={(e) => setTrampa(e.target.value)} />
         {estado.tipo === 'ok' ? (
           <>
             <p className="ok-msg">✓ Gracias. Tu reporte ya aparece en el mapa.</p>
