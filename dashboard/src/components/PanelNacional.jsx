@@ -9,7 +9,7 @@ const LUZ = { falla_masiva: 'Rojo', posibles_problemas: 'Amarillo', normal: 'Ver
 const FUENTE = { geoblackout: 'Geoblackout', fallacl: 'FallaCL', ioda: 'IODA', blackoutmap: 'Blackout Map', atlas: 'RIPE Atlas', ocn: 'Vecinos OCN', downdetector: 'Downdetector' }
 const nombres = (set) => [...set].map((f) => FUENTE[f] ?? f).join(' + ')
 
-export default function PanelNacional({ comunas, paises, nacional, tri, todas = [], idxLuz = indiceLuz([]), actualizado, error, abierto, alternar }) {
+export default function PanelNacional({ comunas, paises, nacional, tri, todas = [], idxLuz = indiceLuz([]), abrirFicha, actualizado, error, abierto, alternar }) {
   const totalChile = paises.find((p) => p.pais === 'CL')?.total ?? 0
   const verif = [...tri.values()].filter((e) => e.pais === 'CL').sort((a, b) => b.fuentes.size - a.fuentes.size)
   return (
@@ -27,8 +27,10 @@ export default function PanelNacional({ comunas, paises, nacional, tri, todas = 
         {verif.length === 0 && <p className="vacio">Ninguna fuente reporta fallas en la última hora.</p>}
         <ul className="lista">
           {verif.map((e) => (
-            <li key={e.empresa} className={e.confirmado ? 'falla_masiva' : 'sin-confirmar'}>
-              <span>{e.empresa}<small>{e.confirmado ? '✓ Confirmada' : 'Sin confirmar'} · {nombres(e.fuentes)}</small>
+            <li key={e.empresa} className={`${e.confirmado ? 'falla_masiva' : 'sin-confirmar'} con-ficha`} role="button" tabIndex={0}
+              onClick={() => abrirFicha?.(e.empresa)} onKeyDown={(k) => (k.key === 'Enter' || k.key === ' ') && abrirFicha?.(e.empresa)}
+              aria-label={`Ver ficha de la caída de ${e.empresa}`}>
+              <span>{e.empresa} <em className="ver-ficha">Ver ficha ›</em><small>{e.confirmado ? '✓ Confirmada' : 'Sin confirmar'} · {nombres(e.fuentes)}</small>
                 <CausaCorta c={causaDeEmpresa(e.empresa, e.pais, todas, idxLuz, tri)} a={alcance(todas, e.empresa, e.pais)} />
               </span>
               <b>{e.fuentes.size}/{FUENTES_TOTALES}</b>

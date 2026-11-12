@@ -7,9 +7,11 @@ import ChatOCN from './components/ChatOCN'
 const Estadisticas = lazy(() => import('./components/Estadisticas'))
 const CortesLuz = lazy(() => import('./components/CortesLuz'))
 const Privacidad = lazy(() => import('./components/Privacidad'))
+const FichaCaida = lazy(() => import('./components/FichaCaida'))
 const Cargando = () => <p className="tenue" style={{ padding: 24 }}>Cargando…</p>
 import { cargarCortesLuz } from './lib/luz'
 import { indiceLuz } from './lib/causa'
+import { slugEmpresa } from './lib/ficha'
 import { PAISES, REGIONES_CL, VISTAS_PAIS } from './lib/geo'
 import { cargarReportes, cargarVecinos, coincidencias, contarSimilares, escucharNuevos, estadoNacional, mezclar, puntosComuna, puntosPais, resumirVecinos, semaforoRegiones, triangular } from './lib/datos'
 
@@ -34,6 +36,16 @@ export default function App() {
   const [luz, setLuz] = useState({ hora: null, comunas: [], total: 0 })
   const [errorLuz, setErrorLuz] = useState(null)
   const [capaLuz, setCapaLuz] = useState(false)
+  // Ficha de caída: vive en la dirección (#caida/vtr) para poder compartirla.
+  const leerFicha = () => (location.hash.match(/^#caida\/([a-z0-9-]+)/) ?? [])[1] ?? null
+  const [ficha, setFicha] = useState(leerFicha)
+  useEffect(() => {
+    const alCambiar = () => setFicha(leerFicha())
+    addEventListener('hashchange', alCambiar)
+    return () => removeEventListener('hashchange', alCambiar)
+  }, [])
+  const abrirFicha = (empresa) => { location.hash = `caida/${slugEmpresa(empresa)}` }
+  const cerrarFicha = () => { history.replaceState(null, '', location.pathname + location.search); setFicha(null) }
 
   async function recargarLuz() {
     try { setLuz(await cargarCortesLuz()); setErrorLuz(null) } catch (e) { setErrorLuz(e.message ?? String(e)) }
@@ -170,7 +182,7 @@ export default function App() {
       )}
       {enMapa && (
       <main className="contenido">
-        <MapaCaidas comunas={comunas} paises={paises} vista={vista} nuevos={nuevos} tri={tri} todas={todas} idxLuz={idxLuz}
+        <MapaCaidas comunas={comunas} paises={paises} vista={vista} nuevos={nuevos} tri={tri} todas={todas} idxLuz={idxLuz} abrirFicha={abrirFicha}
           luz={luz.comunas} capaLuz={capaLuz} alternarLuz={() => setCapaLuz((c) => !c)}
           meAfecta={(region) => setReporte({ abierto: true, region: region ?? '' })} />
         <PanelNacional
@@ -180,12 +192,19 @@ export default function App() {
           tri={tri}
           todas={todas}
           idxLuz={idxLuz}
+          abrirFicha={abrirFicha}
           actualizado={actualizado}
           error={error}
           abierto={panelAbierto}
           alternar={() => setPanelAbierto((a) => !a)}
         />
       </main>
+      )}
+
+      {ficha && (
+        <Suspense fallback={null}>
+          <FichaCaida slug={ficha} cerrar={cerrarFicha} todas={todas} tri={tri} idxLuz={idxLuz} reportar={() => setChatAbierto(true)} />
+        </Suspense>
       )}
 
       {!chatAbierto && (

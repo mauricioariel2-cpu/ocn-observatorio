@@ -99,7 +99,7 @@ function SeguirZoom({ alCambiar }) {
   return null
 }
 
-export default function MapaCaidas({ comunas, paises, vista, nuevos, tri, todas = [], idxLuz = indiceLuz([]), meAfecta, luz = [], capaLuz = false, alternarLuz }) {
+export default function MapaCaidas({ comunas, paises, vista, nuevos, tri, todas = [], idxLuz = indiceLuz([]), abrirFicha, meAfecta, luz = [], capaLuz = false, alternarLuz }) {
   const [zoom, setZoom] = useState(4)
   const nivel = nivelPorZoom(zoom)
   const puntos = useMemo(() => {
@@ -209,6 +209,7 @@ export default function MapaCaidas({ comunas, paises, vista, nuevos, tri, todas 
                           ? <a href={e.url_fuente} target="_blank" rel="noreferrer">{FUENTE[e.fuente] ?? e.fuente}</a>
                           : (FUENTE[e.fuente] ?? e.fuente)} · {hace(e.capturado_en ?? e.ventana)}
                         {e.gravedad_texto && <><br />{e.gravedad_texto}</>}
+                        {e.gravedad !== 'normal' && e.empresa !== 'Red completa' && abrirFicha && <><br /><button className="link-ficha" onClick={() => abrirFicha(e.empresa)}>Ver ficha de la caída de {e.empresa} ›</button></>}
                       </small>
                     </li>
                   )

@@ -612,3 +612,38 @@ button.kpi-chip { font: inherit; font-size: 13px; cursor: pointer; }
 .lista li small.causa-corta.causa-luz, .lista li small.causa-corta.causa-luz_region { color: #7fd0f8; }
 .lista li small.causa-corta.causa-red { color: #ff8a8d; }
 .trampa { position: absolute !important; left: -9999px !important; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+
+/* Ficha de caída (lib/ficha.js) */
+.modal.ficha { max-width: 560px; width: calc(100% - 24px); max-height: calc(100dvh - 40px); overflow-y: auto; position: relative; }
+.ficha-cerrar { position: absolute; top: 12px; right: 12px; background: var(--panel-2); color: var(--texto); border: 0; border-radius: 999px; width: 34px; height: 34px; font-size: 16px; cursor: pointer; }
+.ficha h2 { margin: 2px 0 10px; font-size: 26px; }
+.ficha h3 { margin: 16px 0 6px; font-size: 14px; text-transform: uppercase; letter-spacing: .06em; color: var(--tenue); }
+.ficha-estado { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; padding: 10px 12px; border-radius: 10px; background: var(--panel-2); margin-bottom: 12px; font-size: 14px; }
+.ficha-estado.activa b { color: #ff6b6e; }
+.ficha-estado.terminada b { color: var(--verde); }
+.ficha-estado span { color: var(--tenue); }
+.ficha-datos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 0 0 12px; }
+.ficha-datos div { background: var(--panel-2); border-radius: 10px; padding: 10px 12px; }
+.ficha-datos dt { font-size: 12px; color: var(--tenue); }
+.ficha-datos dd { margin: 2px 0 0; font-size: 18px; font-weight: 700; }
+.ficha-datos dd small { display: block; font-size: 12px; font-weight: 400; color: var(--tenue); }
+.ficha .causa { background: var(--panel-2); color: var(--texto); }
+.ficha .causa small { color: var(--tenue); }
+.ficha-linea { margin: 12px 0; }
+.ficha-linea .barras { display: flex; align-items: flex-end; gap: 2px; height: 70px; padding: 4px; background: var(--panel-2); border-radius: 10px; }
+.ficha-linea .barras i { flex: 1; min-width: 2px; background: rgba(255,255,255,.08); border-radius: 2px 2px 0 0; }
+.ficha-linea .barras i.con { background: #ff6b6e; }
+.ficha-linea figcaption { display: flex; justify-content: space-between; font-size: 11px; color: var(--tenue); margin-top: 4px; }
+.ficha-lugares { font-size: 13px; color: var(--tenue); }
+.ficha-fuentes { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.ficha-fuentes li { display: flex; justify-content: space-between; align-items: center; background: var(--panel-2); border-radius: 10px; padding: 8px 12px; }
+.ficha-fuentes small { display: block; color: var(--tenue); font-size: 12px; }
+.ficha-fuentes a { color: #8fd0ff; }
+.ficha-acciones { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 16px; }
+.ficha-acciones .btn-afecta { grid-column: 1 / -1; }
+.ficha-acciones .btn-sec { width: 100%; }
+.lista li.con-ficha { cursor: pointer; }
+.lista li.con-ficha:hover, .lista li.con-ficha:focus-visible { outline: 1px solid rgba(255,255,255,.25); }
+.ver-ficha { font-style: normal; font-size: 11px; color: #8fd0ff; margin-left: 4px; }
+.link-ficha { background: none; border: 0; padding: 0; margin-top: 4px; color: #1a6fd1; font: inherit; font-weight: 700; cursor: pointer; text-decoration: underline; }
+@media (max-width: 480px) { .ficha-datos dd { font-size: 16px; } .ficha-acciones { grid-template-columns: 1fr; } }
