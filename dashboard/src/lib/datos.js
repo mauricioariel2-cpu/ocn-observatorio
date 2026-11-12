@@ -1,5 +1,6 @@
 import { supabase } from './supabase'
 import { PAISES } from './geo'
+import { esTelecom } from './servicios'
 
 export const HORAS_VENTANA = 3
 const ORDEN = { normal: 0, posibles_problemas: 1, falla_masiva: 2 }
@@ -62,7 +63,7 @@ export function puntosComuna(filas) {
       pais: paisDe(f), total: 0, gravedad: 'normal', detalle: [],
     }
     p.total += f.cantidad_reportes ?? 0
-    p.gravedad = peor(p.gravedad, f.gravedad)
+    if (esTelecom(f)) p.gravedad = peor(p.gravedad, f.gravedad) // apps (bancos, Microsoft 365…) no pintan rojo el mapa de internet
     p.detalle.push(f)
     porLugar.set(k, p)
   }
@@ -205,13 +206,14 @@ const sinTilde = (t) => String(t ?? '').normalize('NFKD').replace(/[̀-ͯ]/g, ''
 export function semaforoRegiones(comunas, regiones, tri) {
   return regiones.map(([nombre]) => {
     const enRegion = comunas.filter((c) => c.pais === 'CL' && sinTilde(c.subtitulo ?? c.titulo) === sinTilde(nombre))
-    const detalle = enRegion.flatMap((c) => c.detalle)
-    const gravedad = enRegion.reduce((g, c) => peor(g, c.gravedad), 'normal')
+    // Solo servicios de telecomunicaciones pintan el semáforo (una caída de un banco o de Microsoft 365 no es una caída de internet).
+    const detalle = enRegion.flatMap((c) => c.detalle).filter(esTelecom)
+    const gravedad = detalle.reduce((g, f) => peor(g, f.gravedad), 'normal')
     const porEmpresa = new Map()
     for (const f of detalle) porEmpresa.set(f.empresa, (porEmpresa.get(f.empresa) ?? 0) + (f.cantidad_reportes ?? 0))
     const principales = [...porEmpresa].sort((a, b) => b[1] - a[1]).slice(0, 2).map(([e, n]) => `${e} ${n}`)
     const confirmado = detalle.some((f) => f.gravedad !== 'normal' && (verifDe(tri, f).confirmado || f.fuente === 'ioda'))
-    return { nombre, gravedad, total: enRegion.reduce((s, c) => s + c.total, 0), principales, confirmado }
+    return { nombre, gravedad, total: detalle.reduce((s, f) => s + (f.cantidad_reportes ?? 0), 0), principales, confirmado }
   }).sort((a, b) => ORDEN[b.gravedad] - ORDEN[a.gravedad] || b.total - a.total)
 }
 

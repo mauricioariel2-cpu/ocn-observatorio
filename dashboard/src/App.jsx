@@ -1,11 +1,13 @@
-import { useEffect, useMemo, useState } from 'react'
+import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
 import MapaCaidas from './components/MapaCaidas'
 import PanelNacional from './components/PanelNacional'
 import ReportarFalla from './components/ReportarFalla'
 import ChatOCN from './components/ChatOCN'
-import Estadisticas from './components/Estadisticas'
-import CortesLuz from './components/CortesLuz'
-import Privacidad from './components/Privacidad'
+// Vistas secundarias: se descargan solo cuando la persona las abre (la portada carga más rápido).
+const Estadisticas = lazy(() => import('./components/Estadisticas'))
+const CortesLuz = lazy(() => import('./components/CortesLuz'))
+const Privacidad = lazy(() => import('./components/Privacidad'))
+const Cargando = () => <p className="tenue" style={{ padding: 24 }}>Cargando…</p>
 import { cargarCortesLuz } from './lib/luz'
 import { indiceLuz } from './lib/causa'
 import { PAISES, REGIONES_CL, VISTAS_PAIS } from './lib/geo'
@@ -159,11 +161,11 @@ export default function App() {
         </div>
       )}
 
-      {vista === 'tendencias' && <main className="contenido scroll"><Estadisticas nacional={nacional} vecinos={vecinos} /></main>}
-      {vista === 'privacidad' && <main className="contenido scroll"><Privacidad /></main>}
+      {vista === 'tendencias' && <main className="contenido scroll"><Suspense fallback={<Cargando />}><Estadisticas nacional={nacional} vecinos={vecinos} /></Suspense></main>}
+      {vista === 'privacidad' && <main className="contenido scroll"><Suspense fallback={<Cargando />}><Privacidad /></Suspense></main>}
       {vista === 'luz' && (
         <main className="contenido scroll">
-          <CortesLuz luz={luz} error={errorLuz} verEnMapa={() => { setCapaLuz(true); ir('chile') }} />
+          <Suspense fallback={<Cargando />}><CortesLuz luz={luz} error={errorLuz} verEnMapa={() => { setCapaLuz(true); ir('chile') }} /></Suspense>
         </main>
       )}
       {enMapa && (

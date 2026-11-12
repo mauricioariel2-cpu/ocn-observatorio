@@ -37,3 +37,5 @@ Disallow: /
 
 User-agent: *
 Allow: /
+
+Sitemap: https://ocn-chile.pages.dev/sitemap.xml

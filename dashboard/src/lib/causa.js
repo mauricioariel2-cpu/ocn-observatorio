@@ -1,4 +1,5 @@
 import { claveEmpresa, verifDe } from './datos'
+import { esTelecom } from './servicios'
 
 // ---------- Causa probable de una caída ----------
 // Idea inspirada en el Centro de caídas de Cloudflare Radar, que etiqueta cada caída con su causa y su alcance.
@@ -16,7 +17,7 @@ const fmt = (n) => n.toLocaleString('es-CL')
 export const MIN_CLIENTES_REGION = 5000
 // Un corte de luz solo explica fallas de servicios de telecomunicaciones (internet, TV, telefonía),
 // no de aplicaciones como bancos, streaming o correo, que funcionan desde servidores lejanos.
-const TELECOM = new Set(['internet', 'internet_fijo', 'internet_movil', 'tv', 'telefonia', 'telefonia_fija'])
+
 
 // Índice de cortes de luz SEC por comuna y por región.
 export function indiceLuz(luz = []) {
@@ -44,7 +45,7 @@ function medicionesConFalla(filas, empresa) {
 // Devuelve { tipo: 'luz' | 'luz_region' | 'red' | 'personas', texto, evidencia } o null si la fila no es una falla.
 export function causaDeFila(f, filas, idx, tri) {
   if (!f || !f.gravedad || f.gravedad === 'normal') return null
-  if ((f.pais ?? 'CL') === 'CL' && TELECOM.has(f.servicio ?? 'internet')) {
+  if ((f.pais ?? 'CL') === 'CL' && esTelecom(f)) {
     const enComuna = f.comuna ? idx.comuna.get(sinTilde(f.comuna)) : null
     if (enComuna) {
       return {

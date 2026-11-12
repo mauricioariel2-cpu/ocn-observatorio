@@ -42,7 +42,7 @@ export default function PanelNacional({ comunas, paises, nacional, tri, todas = 
         <ul className="lista semaforo">
           {semaforoRegiones(comunas, REGIONES_CL, tri).map((r) => (
             <li key={r.nombre} className={r.gravedad}>
-              <i className={`luz ${r.gravedad}`} aria-label={LUZ[r.gravedad]} />
+              <i className={`luz ${r.gravedad}`} role="img" aria-label={LUZ[r.gravedad]} />
               <span>{r.nombre}<small>{r.total === 0 ? 'Sin reportes ahora' : `${ETIQUETA[r.gravedad]}${r.gravedad !== 'normal' && !r.confirmado ? ' (sin confirmar)' : ''} · ${r.principales.join(', ')}`}</small></span>
               <b>{r.total}</b>
             </li>

@@ -507,7 +507,7 @@ button.kpi-chip { font: inherit; font-size: 13px; cursor: pointer; }
 @media (min-width: 761px) {
   .ahora { left: calc((100% - 340px) / 2); }
   .app.vista-mundo .ahora { left: 50%; }
-  .chip-luz { right: 352px; }
+  .chip-luz { right: 352px; top: 58px; }
   .fab-reportar { right: auto; left: 16px; bottom: 26px; }
   .asis.chat { right: auto; left: 16px; bottom: 22px; }
   .app:not(.vista-chile):not(.vista-mundo) .fab-reportar { right: 26px; left: auto; }
