@@ -10,8 +10,8 @@ import { esTelecom } from './servicios'
 //   3. Solo reportes de personas: causa sin determinar.
 
 const sinTilde = (t) => String(t ?? '').normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase().trim()
-const MEDICIONES = new Set(['ioda', 'blackoutmap', 'atlas'])
-const NOMBRE_MEDICION = { ioda: 'IODA', blackoutmap: 'Blackout Map', atlas: 'RIPE Atlas' }
+const MEDICIONES = new Set(['ioda', 'blackoutmap', 'atlas', 'cloudflare'])
+const NOMBRE_MEDICION = { ioda: 'IODA', blackoutmap: 'Blackout Map', atlas: 'RIPE Atlas', cloudflare: 'Cloudflare Radar' }
 const fmt = (n) => n.toLocaleString('es-CL')
 // En la región se exige un corte relevante para sugerirlo como causa (un poste aislado no explica una falla regional).
 export const MIN_CLIENTES_REGION = 5000

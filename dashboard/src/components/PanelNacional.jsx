@@ -6,7 +6,7 @@ import { ICONO_CAUSA, alcance, causaDeEmpresa, indiceLuz } from '../lib/causa'
 
 const LUZ = { falla_masiva: 'Rojo', posibles_problemas: 'Amarillo', normal: 'Verde' }
 
-const FUENTE = { geoblackout: 'Geoblackout', fallacl: 'FallaCL', ioda: 'IODA', blackoutmap: 'Blackout Map', atlas: 'RIPE Atlas', ocn: 'Vecinos OCN', downdetector: 'Downdetector' }
+const FUENTE = { geoblackout: 'Geoblackout', fallacl: 'FallaCL', ioda: 'IODA', blackoutmap: 'Blackout Map', atlas: 'RIPE Atlas', cloudflare: 'Cloudflare Radar', ocn: 'Vecinos OCN', downdetector: 'Downdetector' }
 const nombres = (set) => [...set].map((f) => FUENTE[f] ?? f).join(' + ')
 
 export default function PanelNacional({ comunas, paises, nacional, tri, todas = [], idxLuz = indiceLuz([]), abrirFicha, actualizado, error, abierto, alternar }) {
@@ -56,7 +56,7 @@ export default function PanelNacional({ comunas, paises, nacional, tri, todas = 
         <ul className="lista">
           {nacional.map((f) => (
             <li key={f.id ?? `${f.fuente}-${f.empresa}`} className={f.gravedad}>
-              <span>{f.empresa}<small>{ETIQUETA[f.gravedad] ?? 's/i'} · {FUENTE[f.fuente] ?? f.fuente}{['blackoutmap', 'ioda', 'atlas'].includes(f.fuente) ? ` · ${f.gravedad_texto}` : ''}</small></span>
+              <span>{f.empresa}<small>{ETIQUETA[f.gravedad] ?? 's/i'} · {FUENTE[f.fuente] ?? f.fuente}{['blackoutmap', 'ioda', 'atlas', 'cloudflare'].includes(f.fuente) ? ` · ${f.gravedad_texto}` : ''}</small></span>
               <b>{f.cantidad_reportes ?? '–'}</b>
             </li>
           ))}

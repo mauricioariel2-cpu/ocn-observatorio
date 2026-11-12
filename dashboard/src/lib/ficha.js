@@ -12,7 +12,7 @@ export const HORAS_FICHA = 24
 const PAUSA_MAX_MIN = 60 // si pasan más de 60 min sin señales de falla, se considera otra caída
 const BLOQUE_MIN = 15
 
-export const NOMBRE_FUENTE = { geoblackout: 'Geoblackout', fallacl: 'FallaCL', ioda: 'IODA (Georgia Tech)', blackoutmap: 'Blackout Map', atlas: 'RIPE Atlas', ocn: 'Vecinos en OCN', downdetector: 'Downdetector', bluesky: 'Bluesky' }
+export const NOMBRE_FUENTE = { geoblackout: 'Geoblackout', fallacl: 'FallaCL', ioda: 'IODA (Georgia Tech)', blackoutmap: 'Blackout Map', atlas: 'RIPE Atlas', cloudflare: 'Cloudflare Radar', ocn: 'Vecinos en OCN', downdetector: 'Downdetector', bluesky: 'Bluesky' }
 const PERSONAS = new Set(['geoblackout', 'fallacl', 'ocn', 'bluesky', 'downdetector'])
 
 export const slugEmpresa = (empresa) => claveEmpresa(empresa)

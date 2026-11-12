@@ -975,6 +975,82 @@ async function filasAtlas(): Promise<Fila[]> {
   return parsearAtlas((await r.json()).results ?? []);
 }
 
+// ── Cloudflare Radar: caídas y anomalías de tráfico medidas en la red de Cloudflare (agregado 2026-11-12) ──
+// API gratuita con token de solo lectura (secreto CF_RADAR_TOKEN). Datos CC BY-NC 4.0: se cita la fuente.
+// Sin token, la fuente no hace nada.
+const RADAR_API = "https://api.cloudflare.com/client/v4/radar";
+const RADAR_VIGENTE_H = 3; // un evento terminado hace menos de esto todavía se muestra
+
+type EventoRadar = {
+  id?: string; uuid?: string; type?: string; status?: string; startDate: string; endDate?: string | null;
+  description?: string; linkedUrl?: string; asns?: number[];
+  asnDetails?: { asn: string | number; name?: string }; asnsDetails?: { asn: string | number; name?: string }[];
+  locationDetails?: { code?: string }; locations?: string[];
+  outage?: { outageCause?: string; outageType?: string };
+};
+
+export async function parsearRadar(caidas: EventoRadar[], anomalias: EventoRadar[], ahora = new Date()): Promise<Fila[]> {
+  const ventana = ventana15(ahora);
+  const t = ahora.getTime();
+  const vigente = (e: EventoRadar) => !e.endDate || t - Date.parse(e.endDate) < RADAR_VIGENTE_H * 3600_000;
+  const hhmm = (d: string) => new Date(d).toLocaleTimeString("es-CL", { hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "America/Santiago" });
+  const porEmpresa = new Map<string, { gravedad: string; textos: string[]; asns: Set<string>; raw: EventoRadar[] }>();
+  const pais: { gravedad: string; textos: string[]; raw: EventoRadar[] } = { gravedad: "", textos: [], raw: [] };
+  const sumar = (asns: string[], g: string, texto: string, e: EventoRadar) => {
+    const empresas = new Set(asns.map((a) => ASN_EMPRESA[a]).filter(Boolean));
+    if (!asns.length) { pais.gravedad = pais.gravedad === "falla_masiva" ? pais.gravedad : g; pais.textos.push(texto); pais.raw.push(e); return; }
+    for (const emp of empresas) {
+      const x = porEmpresa.get(emp) ?? { gravedad: g, textos: [], asns: new Set<string>(), raw: [] };
+      if (g === "falla_masiva") x.gravedad = g;
+      x.textos.push(texto); asns.forEach((a) => ASN_EMPRESA[a] === emp && x.asns.add(a)); x.raw.push(e);
+      porEmpresa.set(emp, x);
+    }
+  };
+  for (const e of caidas.filter(vigente)) {
+    const asns = [...(e.asns ?? []), ...(e.asnsDetails ?? []).map((d) => d.asn)].map(String);
+    const causa = e.outage?.outageCause ? ` (causa: ${e.outage.outageCause.replace(/_/g, " ")})` : "";
+    sumar([...new Set(asns)], "falla_masiva", `Cloudflare Radar: caída ${e.endDate ? "terminada" : "en curso"} desde ${hhmm(e.startDate)}${causa}`, e);
+  }
+  for (const e of anomalias.filter(vigente)) {
+    const asn = e.type === "AS" && e.asnDetails ? [String(e.asnDetails.asn)] : [];
+    if (e.type === "AS" && !asn.length) continue;
+    const verif = e.status === "VERIFIED";
+    sumar(asn, verif ? "falla_masiva" : "posibles_problemas", `Cloudflare Radar: caída brusca de tráfico ${verif ? "verificada" : "detectada"} desde ${hhmm(e.startDate)}`, e);
+  }
+  const filas: Fila[] = [];
+  const base = { fuente: "cloudflare", pais: "CL", servicio: "internet", comuna: null, region: null, latitud: CENTRO_PAIS[0], longitud: CENTRO_PAIS[1], precision_geo: "pais", cantidad_reportes: null, ventana };
+  for (const [empresa, x] of porEmpresa) {
+    filas.push({
+      ...base, empresa, gravedad: x.gravedad, gravedad_texto: `${x.textos[0]} · AS${[...x.asns].join(", AS")}`,
+      url_fuente: `https://radar.cloudflare.com/as${[...x.asns][0]}`, raw: x.raw,
+      hash_dedup: await hash(["cloudflare", empresa, ventana]),
+    });
+  }
+  if (pais.gravedad) {
+    filas.push({
+      ...base, empresa: "Red completa", gravedad: pais.gravedad, gravedad_texto: pais.textos[0],
+      url_fuente: "https://radar.cloudflare.com/cl", raw: pais.raw, hash_dedup: await hash(["cloudflare", "pais", ventana]),
+    });
+  }
+  return filas;
+}
+
+async function filasRadar(): Promise<Fila[]> {
+  const token = Deno.env.get("CF_RADAR_TOKEN");
+  if (!token) return [];
+  const h = { Authorization: `Bearer ${token}`, Accept: "application/json" };
+  const pedir = async (ruta: string) => {
+    const r = await fetch(`${RADAR_API}/${ruta}`, { headers: h });
+    if (!r.ok) throw new Error(`Cloudflare Radar ${ruta.split("?")[0]} HTTP ${r.status}`);
+    return (await r.json()).result ?? {};
+  };
+  const [c, a] = await Promise.all([
+    pedir("annotations/outages?location=CL&dateRange=1d&limit=50&format=json"),
+    pedir("traffic_anomalies?location=CL&dateRange=1d&limit=50&format=json"),
+  ]);
+  return parsearRadar(c.annotations ?? [], a.trafficAnomalies ?? []);
+}
+
 async function rest(path: string, init: RequestInit = {}) {
   const url = Deno.env.get("SUPABASE_URL")!;
   const key = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -1285,7 +1361,7 @@ async function corrida(): Promise<Record<string, unknown>> {
   const filas: Fila[] = [];
   // Cada fuente va por separado: si una falla, la otra igual se guarda.
   // Las fuentes se piden en paralelo (son sitios distintos) y cada una tiene su propio tiempo máximo.
-  const fuentes = [["geoblackout", filasGeoblackout], ["fallacl", filasFallacl], ["ioda", filasIoda], ["blackoutmap", filasBlackoutMap], ["atlas", filasAtlas], ["bluesky", filasBluesky],
+  const fuentes = [["geoblackout", filasGeoblackout], ["fallacl", filasFallacl], ["ioda", filasIoda], ["blackoutmap", filasBlackoutMap], ["atlas", filasAtlas], ["cloudflare", filasRadar], ["bluesky", filasBluesky],
     ["geoblackout_sa", filasGeoblackoutSA], ["atlas_sa", filasAtlasSA]] as const;
   const [resultados, sec] = await Promise.all([
     Promise.allSettled(fuentes.map(([, fn]) => fn())),

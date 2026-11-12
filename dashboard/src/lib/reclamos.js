@@ -8,7 +8,7 @@ export const DERECHOS_SUBTEL = 'https://www.subtel.gob.cl/derechos-del-usuario-e
 
 // Texto del reclamo formal. Los datos personales quedan como campos para completar:
 // OCN no los pide ni los guarda.
-const NOMBRE_FUENTE = { geoblackout: 'Geoblackout', fallacl: 'FallaCL', downdetector: 'Downdetector', bluesky: 'Bluesky', ioda: 'IODA (Georgia Tech)', blackoutmap: 'Blackout Map', atlas: 'RIPE Atlas' }
+const NOMBRE_FUENTE = { geoblackout: 'Geoblackout', fallacl: 'FallaCL', downdetector: 'Downdetector', bluesky: 'Bluesky', ioda: 'IODA (Georgia Tech)', blackoutmap: 'Blackout Map', atlas: 'RIPE Atlas', cloudflare: 'Cloudflare Radar' }
 export const servicioTexto = (s) => SERVICIO[s] ?? s
 
 // Párrafo de evidencia con los conteos reales que OCN tenía al momento de armar el reclamo.
