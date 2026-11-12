@@ -2,7 +2,7 @@
 // supresión) sobre lo que OCN guarda asociado al código aleatorio de este celular.
 import { supabase } from './supabase'
 
-export const VERSION_POLITICA = '1.0'
+export const VERSION_POLITICA = '1.1'
 export const FECHA_POLITICA = '9 de noviembre de 2026'
 export const RETENCION_DIAS = 30
 
