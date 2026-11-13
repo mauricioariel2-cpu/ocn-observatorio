@@ -18,6 +18,7 @@ create table if not exists ocn_privado.suscripciones (
   ultimo_aviso timestamptz
 );
 create index if not exists suscripciones_empresa_region_idx on ocn_privado.suscripciones (lower(empresa), region);
+alter table ocn_privado.suscripciones enable row level security;  -- sin políticas: solo las funciones de abajo la tocan
 
 -- La web: suscribirse (o cambiar compañía/región) y anularse. Freno: 200 altas por minuto en total.
 create or replace function public.ocn_suscribir_aviso(p_endpoint text, p_p256dh text, p_auth text, p_empresa text, p_region text)
