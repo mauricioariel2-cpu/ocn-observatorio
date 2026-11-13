@@ -395,7 +395,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 /* Franja "Ahora en Chile" sobre el mapa */
 .ahora {
   position: absolute; z-index: 940; top: calc(var(--barra-alto) + 12px); left: 50%; transform: translateX(-50%);
-  display: flex; gap: 8px; max-width: calc(100% - 24px); overflow-x: auto; scrollbar-width: none; pointer-events: auto;
+  display: flex; align-items: center; gap: 8px; max-width: calc(100% - 24px); overflow-x: auto; scrollbar-width: none; pointer-events: auto;
 }
 .ahora::-webkit-scrollbar { display: none; }
 .kpi-chip {
@@ -509,7 +509,7 @@ button.kpi-chip { font: inherit; font-size: 13px; cursor: pointer; }
 @media (min-width: 761px) {
   .ahora { left: calc((100% - 340px) / 2); }
   .app.vista-mundo .ahora { left: 50%; }
-  .chip-luz { right: 352px; top: 58px; }
+  .chip-luz { right: 352px; top: 114px; }
   .fab-reportar { right: auto; left: 16px; bottom: 26px; }
   .asis.chat { right: auto; left: 16px; bottom: 22px; }
   .app:not(.vista-chile):not(.vista-mundo) .fab-reportar { right: 26px; left: auto; }
@@ -689,7 +689,7 @@ button.kpi-chip { font: inherit; font-size: 13px; cursor: pointer; }
 .em-numeros a { display: flex; flex-direction: column; align-items: center; padding: 12px 6px; border-radius: 10px; background: var(--panel-2); border: 1px solid var(--borde); color: var(--texto); text-decoration: none; text-align: center; }
 .em-numeros b { font-size: 26px; color: var(--rojo); }
 .em-numeros span { font-size: 12px; color: var(--tenue); }
-.kpi-chip.emergencia { cursor: pointer; border: 1px solid var(--rojo); color: var(--texto); font: inherit; }
+.kpi-chip.kpi-emergencia { border-color: rgba(229,37,42,.6); color: var(--texto); }
 .nav-emergencia { color: #ff8a8d; }
 @media (max-width: 1050px) { .marca p { display: none; } }
 

@@ -165,7 +165,7 @@ export default function App() {
             {enRojo ? <><b>{enRojo}</b> en rojo</> : enAmarillo ? <><b>{enAmarillo}</b> en amarillo</> : <>Todo Chile en verde</>}
           </span>
           <span className="kpi-chip"><b>{reportesChile.toLocaleString('es-CL')}</b> reportes · 3 h</span>
-          <button className="kpi-chip emergencia" onClick={() => ir('emergencia')}>🆘 Modo emergencia</button>
+          <button className="kpi-chip kpi-emergencia" onClick={() => ir('emergencia')}>🆘 Emergencia</button>
           {luz.hora && (
             <button className="kpi-chip electrico" onClick={() => ir('luz')}>
               ⚡ <b>{luz.total.toLocaleString('es-CL')}</b> sin luz
