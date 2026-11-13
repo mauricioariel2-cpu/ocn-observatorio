@@ -555,6 +555,30 @@ export async function parsear(html: string, url = FUENTE_URL, ahora = new Date()
     };
     filas.push({ ...base, hash_dedup: await hash([base.fuente, "CL", empresa, "internet", "None", ventana]) });
   }
+  // 4) Desde nov-2026 Geoblackout ya no escribe "X caído en <comuna>": los reportes vienen como comentarios
+  //    dentro de la página, con ciudad. Se agrupan por compañía y comuna (solo comunas reconocidas de Chile).
+  const yaConComuna = new Set(filas.filter((f) => f.comuna).map((f) => `${f.empresa}|${sinTildes(String(f.comuna))}`));
+  const grupos = new Map<string, ComentarioGB[]>();
+  for (const c of comentariosGB(html, "CL", ahora, VENTANA_HORAS)) {
+    const info = c.ciudad ? buscarComuna(c.ciudad) : null;
+    if (!info) continue; // sin comuna ubicable: ya cuenta en el total por compañía
+    if (yaConComuna.has(`${c.empresa}|${sinTildes(info[0])}`)) continue;
+    const serv = c.tipo === "mobile" ? "internet_movil" : c.tipo === "wifi" ? "internet_fijo" : "internet";
+    const k = `${c.empresa}|${serv}|${sinTildes(info[0])}`;
+    grupos.set(k, [...(grupos.get(k) ?? []), { ...c, tipo: serv }]);
+  }
+  for (const lista of grupos.values()) {
+    const info = buscarComuna(lista[0].ciudad);
+    const n = lista.reduce((s, c) => s + 1 + c.mismo, 0);
+    const base = {
+      fuente: "geoblackout", pais: "CL", empresa: lista[0].empresa, servicio: lista[0].tipo ?? "internet",
+      comuna: info[0], region: info[1], latitud: info[2], longitud: info[3], precision_geo: "comuna",
+      cantidad_reportes: n, gravedad: gravedadVolumen(n, 1, 5),
+      gravedad_texto: `${lista.length} comentario(s) + ${n - lista.length} "mismo problema" en las últimas ${VENTANA_HORAS} h`,
+      url_fuente: url, ventana, raw: { comentarios: lista.slice(0, 5).map((c) => ({ texto: c.texto, creado: c.creado, mismo: c.mismo })) },
+    };
+    filas.push({ ...base, hash_dedup: await hash([base.fuente, "CL", base.empresa, base.servicio, base.comuna, ventana]) });
+  }
   return filas.filter((f) => (f.cantidad_reportes as number) > 0 || f.gravedad !== "normal");
 }
 
@@ -1173,11 +1197,12 @@ const OPERADORES_SA: Record<string, string[]> = {
   AR: ["DIRECTV", "Claro", "Fibertel", "Flow", "Movistar", "Personal", "Telecentro", "Telecom", "Starlink"],
   PE: ["DIRECTV", "Bitel", "Claro", "Entel", "Movistar", "WIN", "Starlink"],
   BR: ["SKY", "Claro", "NET", "Nio", "Oi", "TIM", "Vivo", "Starlink"],
+  CL: ["DIRECTV", "Movistar", "Entel", "VTR", "Claro", "WOM", "GTD", "Mundo", "Telsur", "Starlink"],
 };
 const VENTANA_SA_H = 12; // comentarios de las últimas 12 h (sirven para cruzar con otros países)
-export type ComentarioGB = { id: string; empresa: string; texto: string; creado: string; ciudad: string; mismo: number };
+export type ComentarioGB = { id: string; empresa: string; texto: string; creado: string; ciudad: string; mismo: number; tipo?: string };
 
-export function comentariosGB(html: string, cc: string, ahora = new Date()): ComentarioGB[] {
+export function comentariosGB(html: string, cc: string, ahora = new Date(), ventanaH = VENTANA_SA_H): ComentarioGB[] {
   const ops = OPERADORES_SA[cc] ?? [];
   const h = html.replace(/\\"/g, '"');
   // "city" no siempre viene: se busca dentro del resto del comentario.
@@ -1187,15 +1212,16 @@ export function comentariosGB(html: string, cc: string, ahora = new Date()): Com
   for (const m of h.matchAll(re)) {
     const [, id, clave, texto, creado, resto, mismo] = m;
     const ciudad = /"city":"((?:[^"\\]|\\.)*)"/.exec(resto)?.[1] ?? "";
+    const tipo = /"subType":"(\w+)"/.exec(resto)?.[1] ?? "";
     if (vistos.has(id)) continue;
     vistos.add(id);
     const edadH = (ahora.getTime() - Date.parse(creado)) / 3600_000;
-    if (!(edadH >= 0 && edadH <= VENTANA_SA_H)) continue;
+    if (!(edadH >= 0 && edadH <= ventanaH)) continue;
     const slug = clave.split("_").slice(2).join(" ");
     const enTexto = (o: string) => new RegExp(`\\b${o}\\b`, "i").test(texto) || (o === "DIRECTV" && /\bdgo\b|direct ?tv/i.test(texto));
     const empresa = ops.find((o) => slug && o.toLowerCase() === slug.toLowerCase()) ?? ops.find(enTexto);
     if (!empresa) continue;
-    out.push({ id, empresa, texto: texto.replace(/\\n/g, " ").slice(0, 300), creado, ciudad: ciudad.trim(), mismo: Number(mismo) });
+    out.push({ id, empresa, texto: texto.replace(/\\n/g, " ").slice(0, 300), creado, ciudad: ciudad.trim(), mismo: Number(mismo), tipo });
   }
   return out;
 }

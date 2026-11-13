@@ -5,7 +5,7 @@ import 'leaflet/dist/leaflet.css'
 import { FUENTES_TOTALES, puntosRegion, verifDe } from '../lib/datos'
 import { REGIONES_CL, VISTAS, nivelPorZoom, paisDeVista } from '../lib/geo'
 import { ICONO_CAUSA, causaDePunto, indiceLuz } from '../lib/causa'
-import { FUENTE_CONEXIONES, escalaDePunto } from '../lib/conexiones'
+import { FUENTE_CONEXIONES, escalaDePunto, semaforoComunas } from '../lib/conexiones'
 import { COLOR_ESTADO, TEXTO_ESTADO, cargarContornos, cargarEstadoPaises, nombrePais } from '../lib/mundo'
 
 const SERVICIO = { internet_fijo: 'Internet hogar', internet_movil: 'Internet móvil', tv: 'TV', internet: 'Internet', telefonia_fija: 'Telefonía', streaming: 'Streaming', banca: 'Banca' }
@@ -131,13 +131,15 @@ export default function MapaCaidas({ comunas, paises, vista, nuevos, tri, todas 
     const conFalla = new Set(puntos.flatMap((p) => [p.titulo, p.subtitulo, ...p.detalle.map((f) => f.region)]).map(norm))
     return REGIONES_CL.filter(([n]) => !conFalla.has(norm(n)))
   }, [nivel, vista, puntos])
+  // En el zoom de comuna, el color de cada comuna de Chile sale de los reportes por cada 10.000 conexiones.
+  const luzPorComuna = useMemo(() => (nivel === 'comuna' ? new Map(semaforoComunas(puntos).map((c) => [c.id, c.gravedad])) : new Map()), [nivel, puntos])
   const iconos = useMemo(
     () => Object.fromEntries(puntos.map((p) => [p.id, icono(
-      p,
+      luzPorComuna.has(p.id) ? { ...p, gravedad: luzPorComuna.get(p.id) } : p,
       p.detalle.some((f) => nuevos.has(f.id)),
       p.detalle.some((f) => f.gravedad !== 'normal' && (verifDe(tri, f).confirmado || f.fuente === 'ioda')),
     )])),
-    [puntos, nuevos, tri],
+    [puntos, nuevos, tri, luzPorComuna],
   )
 
   return (

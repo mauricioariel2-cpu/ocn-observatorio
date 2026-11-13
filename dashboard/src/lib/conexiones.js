@@ -104,3 +104,36 @@ export function clientesEmpresa(clave, regiones = [], nacional = false) {
   if (!n) return null
   return { n, texto: rs.length === 1 ? `en la región ${rs[0]}` : `en ${rs.length} regiones`, grupo: NOMBRE_GRUPO[g] ?? null }
 }
+
+// Semáforo por comuna: el color sale de los reportes en proporción a los hogares conectados (SUBTEL), no del
+// número bruto. Así 3 reportes en una comuna de 600 conexiones pesan más que 3 en una de 180.000.
+// Reglas (públicas en la leyenda): rojo con 5 o más reportes por cada 10.000 conexiones y al menos 3 reportes;
+// amarillo con 1 o más por cada 10.000 y al menos 2 reportes; verde en otro caso (hay reportes, pero pocos).
+export const REGLA_SEMAFORO_COMUNA = 'Rojo: 5 o más reportes por cada 10.000 conexiones (mínimo 3 reportes). Amarillo: 1 o más por cada 10.000 (mínimo 2). Verde: reportes aislados.'
+export function luzComuna(reportes, conexiones) {
+  const tasa = tasaPor10mil(reportes, conexiones)
+  if (tasa == null) return null
+  const gravedad = tasa >= 5 && reportes >= 3 ? 'falla_masiva' : tasa >= 1 && reportes >= 2 ? 'posibles_problemas' : 'normal'
+  return { tasa, gravedad }
+}
+const TELECOM = new Set(['internet', 'internet_fijo', 'internet_movil', 'tv', 'telefonia', 'telefonia_fija'])
+// Puntos del mapa que son comunas de Chile con reportes de personas → fila del semáforo comunal.
+export function semaforoComunas(puntos) {
+  const out = []
+  for (const p of puntos) {
+    if ((p.pais ?? 'CL') !== 'CL') continue
+    const filas = p.detalle.filter((f) => f.precision_geo === 'comuna' && f.comuna && TELECOM.has(f.servicio ?? 'internet') && f.empresa !== 'Red completa')
+    if (!filas.length) continue
+    const base = conexionesComuna(filas[0].comuna)
+    if (!base) continue
+    const total = filas.reduce((s, f) => s + (f.cantidad_reportes ?? 0), 0)
+    if (!total) continue
+    const luz = luzComuna(total, base.n)
+    const porEmpresa = new Map()
+    for (const f of filas) porEmpresa.set(f.empresa, (porEmpresa.get(f.empresa) ?? 0) + (f.cantidad_reportes ?? 0))
+    out.push({ id: p.id, comuna: base.comuna, region: base.region, total, conexiones: base.n, ...luz,
+      principales: [...porEmpresa].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([e, n]) => `${e} ${n}`) })
+  }
+  const ORDEN = { falla_masiva: 2, posibles_problemas: 1, normal: 0 }
+  return out.sort((a, b) => ORDEN[b.gravedad] - ORDEN[a.gravedad] || b.tasa - a.tasa)
+}

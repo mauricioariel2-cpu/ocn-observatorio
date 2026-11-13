@@ -2,6 +2,7 @@ const ETIQUETA = { falla_masiva: 'Falla masiva', posibles_problemas: 'Posibles p
 
 import { FUENTES_TOTALES, semaforoRegiones } from '../lib/datos'
 import { REGIONES_CL } from '../lib/geo'
+import { FUENTE_CONEXIONES, REGLA_SEMAFORO_COMUNA, semaforoComunas } from '../lib/conexiones'
 import { ICONO_CAUSA, alcance, causaDeEmpresa, indiceLuz } from '../lib/causa'
 
 const LUZ = { falla_masiva: 'Rojo', posibles_problemas: 'Amarillo', normal: 'Verde' }
@@ -50,6 +51,24 @@ export default function PanelNacional({ comunas, paises, nacional, tri, todas = 
             </li>
           ))}
         </ul>
+
+        <h2>Semáforo por comuna</h2>
+        {(() => {
+          const sc = semaforoComunas(comunas)
+          if (!sc.length) return <p className="vacio">Ninguna comuna con reportes ubicados en las últimas 3 h. Una comuna sin reportes no se pinta: no saber no es lo mismo que estar bien.</p>
+          return (
+            <ul className="lista semaforo">
+              {sc.map((c) => (
+                <li key={c.id} className={c.gravedad}>
+                  <i className={`luz ${c.gravedad}`} role="img" aria-label={LUZ[c.gravedad]} />
+                  <span>{c.comuna}<small>{c.tasa < 0.1 ? 'menos de 0,1' : c.tasa.toLocaleString('es-CL')} por cada 10.000 conexiones · {c.region} · {c.principales.join(', ')}</small></span>
+                  <b>{c.total}</b>
+                </li>
+              ))}
+            </ul>
+          )
+        })()}
+        <p className="pie">{REGLA_SEMAFORO_COMUNA} Conexiones: {FUENTE_CONEXIONES}.</p>
 
         <h2>Empresas en Chile</h2>
         {nacional.length === 0 && <p className="vacio">Sin datos en las últimas 3 horas.</p>}
