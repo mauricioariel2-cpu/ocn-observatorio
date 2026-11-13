@@ -2,6 +2,8 @@
 // celular de la persona (localStorage): OCN no los sube. Al servidor solo va, si la persona
 // responde "¿te contestaron?", un resultado anónimo (empresa + resultado + días hábiles).
 import { supabase } from './supabase'
+// Las tablas de reclamos aún no incluyen TuVes ni Zapping: se guardan como "Otro" (el texto del reclamo sí lleva el nombre).
+const EMPRESA_RECLAMO = new Set(['Movistar', 'Entel', 'VTR', 'Claro', 'WOM', 'GTD', 'Mundo', 'Telsur', 'Starlink', 'DIRECTV', 'Otro'])
 
 const CLAVE = 'ocn-mis-reclamos'
 
@@ -161,7 +163,7 @@ Atentamente,
 
 // Resultado anónimo para el contador público "¿responden las compañías?" (sql/011).
 export async function registrarResultado({ empresa, resultado, dias_habiles, dispositivo }) {
-  const { error } = await supabase.from('reclamos_resultados').insert({ empresa, resultado, dias_habiles, dispositivo })
+  const { error } = await supabase.from('reclamos_resultados').insert({ empresa: EMPRESA_RECLAMO.has(empresa) ? empresa : 'Otro', resultado, dias_habiles, dispositivo })
   if (error) throw new Error(error.message)
 }
 

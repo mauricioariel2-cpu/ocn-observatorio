@@ -1,4 +1,6 @@
 import { supabase } from './supabase'
+// Las tablas de reclamos aún no incluyen TuVes ni Zapping: se guardan como "Otro" (el texto del reclamo sí lleva el nombre).
+const EMPRESA_RECLAMO = new Set(['Movistar', 'Entel', 'VTR', 'Claro', 'WOM', 'GTD', 'Mundo', 'Telsur', 'Starlink', 'DIRECTV', 'Otro'])
 
 const SERVICIO = { internet_fijo: 'internet de hogar', internet_movil: 'internet móvil', tv: 'televisión', telefonia: 'telefonía' }
 const DESDE = { recien: 'hace pocos minutos', '1h': 'hace aproximadamente 1 hora', '3h': 'hace 3 horas o más', ayer: 'desde ayer o antes' }
@@ -48,7 +50,7 @@ Atentamente,
 }
 
 export async function registrarReclamo({ empresa, servicio, region, tipo, desde, dispositivo }) {
-  const { error } = await supabase.from('reclamos_ciudadanos').insert({ empresa, servicio, region, tipo, desde: desde ?? null, dispositivo })
+  const { error } = await supabase.from('reclamos_ciudadanos').insert({ empresa: EMPRESA_RECLAMO.has(empresa) ? empresa : 'Otro', servicio, region, tipo, desde: desde ?? null, dispositivo })
   if (error) throw new Error(error.message)
 }
 
