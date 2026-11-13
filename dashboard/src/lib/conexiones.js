@@ -71,3 +71,36 @@ export function escalaDeZona(comunas = [], regiones = [], nacional = false) {
   if (rs.length) return { n: rs.reduce((a, r) => a + r.n, 0), texto: rs.length === 1 ? `en la región ${rs[0].region}` : `en las ${rs.length} regiones con reportes` }
   return null
 }
+
+// Conexiones fijas por compañía y región, junio de 2026 (SUBTEL, misma planilla, hoja 7.7.1 CO_TEC_RG_EMP_FIJAS;
+// se suman todas las tecnologías). Verificado: en cada región la suma de todas las empresas da el total de SUBTEL.
+// Solo internet FIJO: los clientes móviles de Entel, WOM, Movistar o Claro no están aquí.
+// Entel = Entelphone + Entel-Chile S.A.; Claro y VTR aparecen juntos como "Grupo Claro-VTR".
+const EMPRESA_REGION = {
+  movistar: {"Tarapacá":38427,"Antofagasta":71172,"Atacama":30386,"Coquimbo":66971,"Valparaíso":173015,"O'Higgins":53562,"Maule":54798,"Biobío":105457,"Araucanía":53191,"Los Lagos":21746,"Aysén":3901,"Magallanes":40582,"Metropolitana":532324,"Los Ríos":7266,"Arica y Parinacota":27856,"Ñuble":19237},
+  claro_vtr: {"Tarapacá":37908,"Antofagasta":76158,"Atacama":20248,"Coquimbo":61094,"Valparaíso":200819,"O'Higgins":38253,"Maule":48228,"Biobío":115619,"Araucanía":39187,"Los Lagos":32687,"Aysén":16,"Magallanes":10380,"Metropolitana":529055,"Los Ríos":16706,"Arica y Parinacota":24223,"Ñuble":24156},
+  mundo: {"Antofagasta":6976,"Atacama":10350,"Coquimbo":39853,"Valparaíso":134286,"O'Higgins":81857,"Maule":79696,"Biobío":187066,"Araucanía":72690,"Los Lagos":35804,"Metropolitana":320926,"Los Ríos":21154,"Arica y Parinacota":4013,"Ñuble":42936},
+  entel: {"Tarapacá":10260,"Antofagasta":16250,"Atacama":6104,"Coquimbo":21774,"Valparaíso":51350,"O'Higgins":11245,"Maule":14119,"Biobío":19774,"Araucanía":7681,"Los Lagos":6555,"Aysén":18,"Magallanes":100,"Metropolitana":363186,"Los Ríos":1976,"Arica y Parinacota":1943,"Ñuble":4278},
+  wom: {"Coquimbo":9,"Valparaíso":8999,"O'Higgins":4814,"Metropolitana":202541},
+  telsur: {"O'Higgins":3861,"Maule":4701,"Biobío":31481,"Araucanía":32644,"Los Lagos":68750,"Aysén":26,"Magallanes":3,"Metropolitana":15,"Los Ríos":30788,"Ñuble":5222},
+  starlink: {"Tarapacá":3500,"Antofagasta":10885,"Atacama":7428,"Coquimbo":7877,"Valparaíso":17718,"O'Higgins":10584,"Maule":10058,"Biobío":14350,"Araucanía":15590,"Los Lagos":20753,"Aysén":5648,"Magallanes":4093,"Metropolitana":25152,"Los Ríos":8530,"Arica y Parinacota":1452,"Ñuble":5827},
+  gtd: {"Tarapacá":2438,"Antofagasta":3615,"Coquimbo":3141,"Valparaíso":6109,"Metropolitana":92654,"Arica y Parinacota":681},
+  directv: {"Tarapacá":693,"Antofagasta":1601,"Atacama":793,"Coquimbo":2756,"Valparaíso":4752,"O'Higgins":1758,"Maule":3267,"Biobío":2643,"Araucanía":2051,"Los Lagos":1751,"Aysén":147,"Magallanes":1722,"Metropolitana":10790,"Los Ríos":341,"Arica y Parinacota":114,"Ñuble":875},
+}
+const GRUPO = { vtr: 'claro_vtr', claro: 'claro_vtr' }
+export const NOMBRE_GRUPO = { claro_vtr: 'Claro-VTR' }
+
+// Clientes de internet fijo de una compañía (clave de claveEmpresa) en las regiones dadas, o en todo Chile.
+export function clientesEmpresa(clave, regiones = [], nacional = false) {
+  const g = GRUPO[clave] ?? clave
+  const datos = EMPRESA_REGION[g]
+  if (!datos) return null
+  if (nacional || regiones.length === 0) {
+    return { n: Object.values(datos).reduce((a, b) => a + b, 0), texto: 'en todo Chile', grupo: NOMBRE_GRUPO[g] ?? null }
+  }
+  const rs = [...new Set(regiones.map((r) => conexionesRegion(r)?.region).filter(Boolean))]
+  if (!rs.length) return null
+  const n = rs.reduce((a, r) => a + (datos[r] ?? 0), 0)
+  if (!n) return null
+  return { n, texto: rs.length === 1 ? `en la región ${rs[0]}` : `en ${rs.length} regiones`, grupo: NOMBRE_GRUPO[g] ?? null }
+}
