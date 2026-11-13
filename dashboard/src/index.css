@@ -310,7 +310,9 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .kpi span { color: var(--tenue); font-size: 12px; font-weight: 600; }
 .kpi b { font-size: 32px; font-weight: 800; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
 .kpi small { color: var(--tenue); font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.kpi.rojo { border-top: 3px solid var(--rojo); } .kpi.verde { border-top: 3px solid var(--verde); }
+.kpi.rojo { border-top: 3px solid var(--rojo); } .kpi.verde { border-top: 3px solid var(--verde); } .kpi.naranjo { border-top: 3px solid var(--naranjo); }
+.ayuda { margin: 0 0 10px; color: var(--tenue); font-size: 13px; line-height: 1.45; }
+.d-nombre small { display: block; color: var(--tenue); font-size: 11px; }
 .tarjeta { background: var(--panel); border: 1px solid var(--borde); border-radius: 16px; padding: 16px; min-width: 0; }
 .tarjeta header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
 .tarjeta h3 { margin: 0; font-size: 15px; }
@@ -339,7 +341,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .barras b { text-align: right; font-variant-numeric: tabular-nums; }
 .barras small { grid-column: 2; color: var(--tenue); font-size: 11px; }
 .disp { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
-.disp li { display: grid; grid-template-columns: 90px 1fr auto; gap: 10px; align-items: center; font-size: 13px; }
+.disp li { display: grid; grid-template-columns: 96px 1fr auto; gap: 10px; align-items: center; font-size: 13px; }
 .spark { width: 100%; height: 28px; }
 .spark polyline { stroke: #3987e5; }
 .disp b { font-variant-numeric: tabular-nums; } .disp b.ok { color: var(--verde); } .disp b.medio { color: var(--naranjo); } .disp b.mal { color: var(--rojo); }

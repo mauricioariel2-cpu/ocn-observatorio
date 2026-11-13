@@ -193,7 +193,7 @@ export default function App() {
         </div>
       )}
 
-      {vista === 'tendencias' && <main className="contenido scroll"><Suspense fallback={<Cargando />}><Estadisticas nacional={nacional} vecinos={vecinos} /></Suspense></main>}
+      {vista === 'tendencias' && <main className="contenido scroll"><Suspense fallback={<Cargando />}><Estadisticas todas={todas} vecinos={vecinos} /></Suspense></main>}
       {vista === 'emergencia' && <main className="contenido scroll"><Suspense fallback={<Cargando />}><Emergencia todas={todas} luz={luz} entorno={entorno} actualizado={actualizado} abrirFicha={abrirFicha} verLuz={() => ir('luz')} /></Suspense></main>}
       {vista === 'privacidad' && <main className="contenido scroll"><Suspense fallback={<Cargando />}><Privacidad /></Suspense></main>}
       {vista === 'luz' && (

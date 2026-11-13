@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { cargarReclamos } from '../lib/reclamos'
+import { estadoEmpresas } from '../lib/estadoEmpresas'
+import { TELECOM } from '../lib/servicios'
 import RespuestaEmpresas from './RespuestaEmpresas'
 
 // Color fijo por empresa (sigue a la entidad, nunca al ranking). Paleta categórica
@@ -9,22 +11,50 @@ const COLOR = { Movistar: '#3987e5', Entel: '#d95926', VTR: '#199e70', Claro: '#
 const OTRAS = '#7d8597'
 const RANGOS = [['24h', 24], ['7 días', 168], ['30 días', 720]]
 const HORAS_PARA_PREDECIR = 24 * 28
+const HORA = 3_600_000
 
 const fmtHora = (d) => d.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
 const fmtDia = (d) => d.toLocaleDateString('es-CL', { weekday: 'short', day: 'numeric' })
-
-async function leer(vista, columnas, orden) {
-  let q = supabase.from(vista).select(columnas)
-  if (orden) q = q.order(orden, { ascending: true })
-  const { data, error } = await q.limit(5000)
-  if (error) throw error
-  return data ?? []
+const inicioHora = (t) => Math.floor(t / HORA) * HORA
+const inicioDiaChile = () => {
+  // 00:00 de hoy en Chile, como instante UTC (sirve con horario de verano o sin él).
+  const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Santiago' })
+  for (const off of ['-03:00', '-04:00']) {
+    const t = Date.parse(`${hoy}T00:00:00${off}`)
+    if (new Date(t).toLocaleDateString('en-CA', { timeZone: 'America/Santiago' }) === hoy &&
+      new Date(t - 60_000).toLocaleDateString('en-CA', { timeZone: 'America/Santiago' }) !== hoy) return t
+  }
+  return Date.parse(`${hoy}T00:00:00-03:00`)
 }
 
-export default function Estadisticas({ nacional, vecinos }) {
-  const [serie, setSerie] = useState([])
-  const [disp, setDisp] = useState([])
-  const [regiones, setRegiones] = useState([])
+// Lee todas las filas de una consulta en páginas de 1000 (el máximo que entrega Supabase por vez).
+async function leerTodo(armar, maxPaginas = 15) {
+  const filas = []
+  for (let p = 0; p < maxPaginas; p++) {
+    const { data, error } = await armar().range(p * 1000, p * 1000 + 999)
+    if (error) throw error
+    filas.push(...(data ?? []))
+    if (!data || data.length < 1000) break
+  }
+  return filas
+}
+
+const base = (desde) => supabase.from('reportes_caidas').select('capturado_en, empresa, servicio, region, cantidad_reportes, raw')
+  .eq('pais', 'CL').gte('capturado_en', new Date(desde).toISOString()).order('capturado_en', { ascending: true })
+
+// Geoblackout informa cuántas personas reportaron en las 24 h previas (raw.total_24h).
+// Una sola fuente y una sola regla de conteo: no se suman fuentes con ventanas distintas.
+const leerSerie = (horas) => leerTodo(() => base(Date.now() - horas * HORA).eq('fuente', 'geoblackout').eq('precision_geo', 'pais'))
+// FallaCL por región: conteos de HOY, solo internet, TV y telefonía (sin bancos ni apps).
+const leerRegiones = () => leerTodo(() => base(inicioDiaChile()).eq('fuente', 'fallacl').eq('precision_geo', 'region').in('servicio', [...TELECOM]))
+// RIPE Atlas: sondas (equipos de prueba) dentro de cada red y cuántas se desconectaron en 3 h.
+const leerSondas = () => leerTodo(() => base(Date.now() - 24 * HORA).eq('fuente', 'atlas'))
+
+export default function Estadisticas({ todas = [], vecinos }) {
+  const [serie, setSerie] = useState(null)
+  const [sondas, setSondas] = useState(null)
+  const [regiones, setRegiones] = useState(null)
+  const [inicio, setInicio] = useState(null)
   const [reclamos, setReclamos] = useState([])
   const [error, setError] = useState(null)
   const [rango, setRango] = useState(24)
@@ -35,39 +65,36 @@ export default function Estadisticas({ nacional, vecinos }) {
     async function cargar() {
       try {
         cargarReclamos(30).then((x) => vivo && setReclamos(x)).catch(() => {})
-        const [s, d, r] = await Promise.all([
-          leer('ocn_serie_reportes', 'hora, empresa, reportes, fuentes', 'hora'),
-          leer('ocn_disponibilidad', 'hora, empresa, pct, sondas', 'hora'),
-          leer('ocn_regiones_hoy', 'region, reportes, principal'),
-        ])
+        supabase.from('reportes_caidas').select('capturado_en').eq('fuente', 'geoblackout').order('capturado_en', { ascending: true }).limit(1)
+          .then(({ data }) => vivo && data?.[0] && setInicio(Date.parse(data[0].capturado_en)))
+        const [s, r, a] = await Promise.all([leerSerie(rango), leerRegiones(), leerSondas()])
         if (!vivo) return
-        setSerie(s); setDisp(d); setRegiones(r.sort((a, b) => b.reportes - a.reportes)); setError(null)
+        setSerie(s); setRegiones(resumirRegiones(r)); setSondas(a); setError(null)
       } catch (e) {
         if (vivo) setError(e.message ?? String(e))
       }
     }
+    setSerie(null)
     cargar()
     const id = setInterval(cargar, 120_000)
     return () => { vivo = false; clearInterval(id) }
-  }, [])
+  }, [rango])
 
-  const horasHistorial = useMemo(() => {
-    if (!serie.length) return 0
-    return Math.max(1, Math.round((Date.now() - Date.parse(serie[0].hora)) / 3_600_000))
-  }, [serie])
-
-  const series = useMemo(() => armarSeries(serie, rango), [serie, rango])
+  const horasHistorial = inicio ? Math.max(1, Math.round((Date.now() - inicio) / HORA)) : 0
+  const series = useMemo(() => armarSeries(serie ?? [], rango), [serie, rango])
   const ultimaHora = series.horas.at(-1)
-  const ahora = ultimaHora ? series.lineas.reduce((s, l) => s + (l.valores.at(-1) ?? 0), 0) : 0
-  const conFalla = nacional.filter((f) => f.gravedad !== 'normal' && f.empresa !== 'Red completa')
-  const empresasConFalla = new Set(conFalla.map((f) => f.empresa.split(' ')[0])).size
+  const ahora = series.lineas.reduce((s, l) => s + (l.valores.at(-1) ?? 0), 0)
+  const estados = useMemo(() => estadoEmpresas(todas), [todas])
+  const conFalla = estados.filter((e) => e.estado === 'caida' || e.estado === 'problemas')
+  const confirmadas = conFalla.filter((e) => e.estado === 'caida').length
+  const cargando = serie == null && !error
 
   return (
     <div className="stats">
       <div className="stats-cab">
         <div>
           <h2>Tendencias de la red en Chile</h2>
-          <p>Datos reales que el bot guarda cada 15 minutos desde {serie[0] ? `${fmtDia(new Date(serie[0].hora))}, ${fmtHora(new Date(serie[0].hora))} h` : '…'}.</p>
+          <p>Cómo ha ido cada compañía en las últimas horas y días. Se actualiza solo cada 15 minutos{inicio ? `; hay datos desde el ${fmtDia(new Date(inicio))}` : ''}.</p>
         </div>
         <div className="seg" role="group" aria-label="Rango de tiempo">
           {RANGOS.map(([t, h]) => <button key={t} className={rango === h ? 'activo' : ''} onClick={() => setRango(h)}>{t}</button>)}
@@ -76,33 +103,40 @@ export default function Estadisticas({ nacional, vecinos }) {
       {error && <p className="error">No pude leer las estadísticas: {error}</p>}
 
       <div className="kpis">
-        <Kpi valor={ahora} titulo="Reportes ciudadanos" detalle={ultimaHora ? `hora de las ${fmtHora(ultimaHora)} · Geoblackout + FallaCL` : 'sin datos aún'} />
-        <Kpi valor={empresasConFalla} titulo="Empresas con falla ahora" detalle={conFalla.length ? [...new Set(conFalla.map((f) => f.empresa))].slice(0, 3).join(', ') : 'ninguna'} acento={empresasConFalla ? 'rojo' : 'verde'} />
-        <Kpi valor={vecinos.length} titulo="Vecinos reportaron en OCN" detalle="últimas 3 horas" />
-        <Kpi valor={`${horasHistorial} h`} titulo="Historial acumulado" detalle="crece solo, cada 15 min" />
+        <Kpi valor={cargando ? '…' : ahora} titulo="Personas reportando fallas" detalle={ultimaHora ? 'en las últimas 24 h (Geoblackout)' : cargando ? 'cargando' : 'sin datos'} />
+        <Kpi valor={conFalla.length} titulo="Compañías con problemas ahora"
+          detalle={conFalla.length ? `${conFalla.map((e) => e.empresa).slice(0, 3).join(', ')}${confirmadas ? '' : ' (sin confirmar)'}` : 'ninguna'}
+          acento={confirmadas ? 'rojo' : conFalla.length ? 'naranjo' : 'verde'} />
+        <Kpi valor={vecinos.length} titulo="Reportes hechos en OCN" detalle="últimas 3 horas" />
+        <Kpi valor={inicio ? `${Math.round(horasHistorial / 24)} días` : '…'} titulo="Historial guardado" detalle="crece solo, cada 15 min" />
       </div>
 
       <section className="tarjeta">
         <header>
-          <h3>Reportes ciudadanos por hora</h3>
+          <h3>¿Cuánta gente reporta fallas? · por compañía</h3>
           <button className="enlace" onClick={() => setTabla((t) => !t)}>{tabla ? 'Ver gráfico' : 'Ver tabla'}</button>
         </header>
-        {series.horas.length < 2
-          ? <p className="vacio">Aún hay pocas horas de datos en este rango. El gráfico se llena solo.</p>
-          : tabla ? <TablaSerie series={series} /> : <GraficoLineas series={series} />}
-        <p className="fuente">Máximo informado en cada hora por Geoblackout y FallaCL (totales nacionales). Movistar, Entel, VTR, Claro y WOM llevan color propio; el resto suma "Otras". Las horas sin captura nueva quedan en blanco.</p>
+        <p className="ayuda">Cada punto es el número de personas que reportaron una falla en las <b>24 horas anteriores</b>. Si una línea sube de golpe, mucha gente empezó a tener problemas con esa compañía.</p>
+        {cargando ? <p className="vacio">Cargando…</p>
+          : series.horas.length < 2
+            ? <p className="vacio">Aún hay pocas horas de datos en este rango. El gráfico se llena solo.</p>
+            : tabla ? <TablaSerie series={series} /> : <GraficoLineas series={series} />}
+        <p className="fuente">Fuente: Geoblackout (reportes de personas, totales de todo Chile). Una captura por hora. Las compañías que Geoblackout no informa no aparecen aquí; míralas en el mapa.</p>
       </section>
 
       <div className="dos-col">
         <section className="tarjeta">
-          <header><h3>Regiones con más reportes hoy</h3></header>
-          {regiones.length === 0 ? <p className="vacio">Sin reportes por región hoy.</p> : <BarrasRegiones filas={regiones.slice(0, 10)} />}
-          <p className="fuente">FallaCL, acumulado desde las 00:00 (hora de Chile).</p>
+          <header><h3>Dónde reporta más gente hoy</h3></header>
+          {regiones == null ? <p className="vacio">Cargando…</p>
+            : regiones.length === 0 ? <p className="vacio">Nadie ha reportado fallas por región hoy.</p>
+              : <BarrasRegiones filas={regiones.slice(0, 10)} />}
+          <p className="fuente">Reportes de personas en FallaCL desde las 00:00 (hora de Chile). Solo internet, TV y telefonía. Bajo cada barra, la compañía con más reportes.</p>
         </section>
         <section className="tarjeta">
-          <header><h3>¿Responde la red por dentro?</h3></header>
-          <Disponibilidad filas={disp} />
-          <p className="fuente">Sondas de Blackout Map dentro de cada red (CC BY-NC 4.0). 100% = todos los puntos de prueba responden.</p>
+          <header><h3>¿La red responde por dentro?</h3></header>
+          <p className="ayuda">Equipos de prueba instalados dentro de cada red. Si dejan de responder, la falla es real aunque nadie la reporte.</p>
+          {sondas == null ? <p className="vacio">Cargando…</p> : <Disponibilidad filas={sondas} />}
+          <p className="fuente">RIPE Atlas: equipos conectados en las últimas 3 h, últimas 24 h. Con pocos equipos (1 a 3) el dato es solo una pista.</p>
         </section>
       </div>
 
@@ -121,13 +155,34 @@ export default function Estadisticas({ nacional, vecinos }) {
       <section className="tarjeta prediccion">
         <header><h3>Predicción de fallas</h3></header>
         <p>Para predecir cuándo y dónde falla cada empresa necesitamos al menos <b>4 semanas</b> de historial: así se ven los patrones por hora, por día de la semana y por región. No vamos a mostrar predicciones inventadas.</p>
-        <div className="progreso" role="progressbar" aria-valuemin={0} aria-valuemax={HORAS_PARA_PREDECIR} aria-valuenow={horasHistorial}>
+        <div className="progreso" role="progressbar" aria-valuemin={0} aria-valuemax={HORAS_PARA_PREDECIR} aria-valuenow={Math.min(horasHistorial, HORAS_PARA_PREDECIR)}>
           <i style={{ width: `${Math.min(100, (horasHistorial / HORAS_PARA_PREDECIR) * 100)}%` }} />
         </div>
-        <small>{horasHistorial} de {HORAS_PARA_PREDECIR} horas reunidas ({Math.round((horasHistorial / HORAS_PARA_PREDECIR) * 100)}%)</small>
+        <small>{Math.round(horasHistorial / 24)} de 28 días reunidos ({Math.min(100, Math.round((horasHistorial / HORAS_PARA_PREDECIR) * 100))}%)</small>
       </section>
     </div>
   )
+}
+
+// FallaCL entrega el acumulado de hoy por región y compañía: se toma el mayor de cada
+// región × compañía × servicio (como la vista SQL) y se suma por región.
+function resumirRegiones(filas) {
+  const max = new Map()
+  for (const f of filas) {
+    const k = `${f.region}|${f.empresa}|${f.servicio}`
+    max.set(k, Math.max(max.get(k) ?? 0, f.cantidad_reportes ?? 0))
+  }
+  const reg = new Map()
+  for (const [k, n] of max) {
+    if (!n) continue
+    const [region, empresa] = k.split('|')
+    const r = reg.get(region) ?? { region, reportes: 0, porEmpresa: new Map() }
+    r.reportes += n
+    r.porEmpresa.set(empresa, (r.porEmpresa.get(empresa) ?? 0) + n)
+    reg.set(region, r)
+  }
+  return [...reg.values()].map((r) => ({ region: r.region, reportes: r.reportes, principal: [...r.porEmpresa].sort((a, b) => b[1] - a[1])[0][0] }))
+    .sort((a, b) => b.reportes - a.reportes)
 }
 
 function Kpi({ valor, titulo, detalle, acento }) {
@@ -140,25 +195,35 @@ function Kpi({ valor, titulo, detalle, acento }) {
   )
 }
 
-// Matriz hora × empresa en un eje continuo de horas. Una hora sin captura queda vacía
-// (null): el gráfico corta la línea en vez de inventar un cero o repetir el valor.
+// Matriz hora × empresa en un eje continuo de horas. Por hora se usa la última captura
+// de cada compañía. Una hora sin captura queda vacía (null): el gráfico corta la línea
+// en vez de inventar un cero o repetir el valor.
 function armarSeries(filas, rangoH) {
-  const desde = Date.now() - rangoH * 3_600_000
-  const dentro = filas.filter((f) => Date.parse(f.hora) >= desde)
+  const desde = Date.now() - rangoH * HORA
+  const ultima = new Map()
+  for (const f of filas) {
+    const t = Date.parse(f.capturado_en)
+    if (!(t >= desde) || f.cantidad_reportes == null) continue
+    const h = inicioHora(t)
+    const k = `${h}|${f.empresa}`
+    const prev = ultima.get(k)
+    if (!prev || prev.t <= t) ultima.set(k, { t, h, empresa: f.empresa, n: f.cantidad_reportes })
+  }
+  const dentro = [...ultima.values()]
   if (!dentro.length) return { horas: [], lineas: [] }
-  const t0 = Math.min(...dentro.map((f) => Date.parse(f.hora)))
-  const t1 = Math.max(...dentro.map((f) => Date.parse(f.hora)))
+  const t0 = Math.min(...dentro.map((f) => f.h))
+  const t1 = Math.max(...dentro.map((f) => f.h))
   const horas = []
-  for (let t = t0; t <= t1; t += 3_600_000) horas.push(new Date(t))
+  for (let t = t0; t <= t1; t += HORA) horas.push(new Date(t))
   const total = new Map()
-  for (const f of dentro) total.set(f.empresa, (total.get(f.empresa) ?? 0) + f.reportes)
+  for (const f of dentro) total.set(f.empresa, (total.get(f.empresa) ?? 0) + f.n)
   const propias = [...total].filter(([e]) => COLOR[e]).sort((a, b) => b[1] - a[1]).map(([e]) => e)
   const lineas = [...propias, 'Otras'].map((nombre) => ({ nombre, color: COLOR[nombre] ?? OTRAS, valores: horas.map(() => null) }))
   const porNombre = new Map(lineas.map((l) => [l.nombre, l]))
   for (const f of dentro) {
     const l = porNombre.get(COLOR[f.empresa] ? f.empresa : 'Otras')
-    const i = Math.round((Date.parse(f.hora) - t0) / 3_600_000)
-    l.valores[i] = (l.valores[i] ?? 0) + f.reportes
+    const i = Math.round((f.h - t0) / HORA)
+    l.valores[i] = (l.valores[i] ?? 0) + f.n
   }
   return { horas, lineas: lineas.filter((l) => l.valores.some((v) => v != null)) }
 }
@@ -269,26 +334,41 @@ function BarrasRegiones({ filas }) {
   )
 }
 
+// Por compañía y hora: % de sondas RIPE Atlas que siguieron conectadas (última captura de la hora).
 function Disponibilidad({ filas }) {
   const porEmpresa = new Map()
-  for (const f of filas) porEmpresa.set(f.empresa, [...(porEmpresa.get(f.empresa) ?? []), f])
-  if (!porEmpresa.size) return <p className="vacio">Sin mediciones aún.</p>
+  for (const f of filas) {
+    const total = Number(f.raw?.total), caidas = Number(f.raw?.caidas)
+    if (!(total > 0) || !Number.isFinite(caidas)) continue
+    const t = Date.parse(f.capturado_en)
+    const m = porEmpresa.get(f.empresa) ?? new Map()
+    m.set(inicioHora(t), { t, total, pct: Math.round(100 * (total - caidas) / total) })
+    porEmpresa.set(f.empresa, m)
+  }
+  if (!porEmpresa.size) return <p className="vacio">Sin mediciones en las últimas 24 horas.</p>
+  const lista = [...porEmpresa].map(([empresa, m]) => ({ empresa, puntos: [...m.values()].sort((a, b) => a.t - b.t) }))
+    .sort((a, b) => b.puntos.at(-1).total - a.puntos.at(-1).total)
+  const ultima = Math.max(...lista.map((e) => e.puntos.at(-1).t))
   return (
-    <ul className="disp">
-      {[...porEmpresa].map(([empresa, puntos]) => {
-        const ult = puntos.at(-1)
-        const estado = ult.pct >= 90 ? 'ok' : ult.pct >= 50 ? 'medio' : 'mal'
-        const w = 120, h = 28
-        const pts = puntos.slice(-48).map((p, i, a) => `${a.length === 1 ? w / 2 : (i / (a.length - 1)) * w},${h - 3 - (p.pct / 100) * (h - 6)}`).join(' ')
-        return (
-          <li key={empresa} title={`${empresa}: ${ult.pct}% de ${ult.sondas} sondas responden`}>
-            <span className="d-nombre">{empresa}</span>
-            <svg viewBox={`0 0 ${w} ${h}`} className="spark" aria-hidden><polyline points={pts} fill="none" strokeWidth="2" /></svg>
-            <b className={estado}>{estado === 'ok' ? '✓' : estado === 'medio' ? '!' : '✕'} {ult.pct}%</b>
-          </li>
-        )
-      })}
-    </ul>
+    <>
+      <ul className="disp">
+        {lista.map(({ empresa, puntos }) => {
+          const ult = puntos.at(-1)
+          const estado = ult.pct >= 90 ? 'ok' : ult.pct >= 50 ? 'medio' : 'mal'
+          const w = 120, h = 28
+          const pts = puntos.map((p, i, a) => `${a.length === 1 ? w / 2 : (i / (a.length - 1)) * w},${h - 3 - (p.pct / 100) * (h - 6)}`).join(' ')
+          const texto = estado === 'ok' ? 'Responde' : estado === 'medio' ? 'A medias' : 'No responde'
+          return (
+            <li key={empresa} title={`${empresa}: ${ult.pct}% de ${ult.total} equipos conectados (${fmtHora(new Date(ult.t))})`}>
+              <span className="d-nombre">{empresa}<small>{ult.total} {ult.total === 1 ? 'equipo' : 'equipos'}</small></span>
+              <svg viewBox={`0 0 ${w} ${h}`} className="spark" aria-hidden><polyline points={pts} fill="none" strokeWidth="2" /></svg>
+              <b className={estado}>{estado === 'ok' ? '✓' : estado === 'medio' ? '!' : '✕'} {texto}</b>
+            </li>
+          )
+        })}
+      </ul>
+      <p className="vacio">Última medición: {fmtHora(new Date(ultima))} h.</p>
+    </>
   )
 }
 
