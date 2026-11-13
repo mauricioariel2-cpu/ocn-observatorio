@@ -228,11 +228,13 @@ export function semaforoRegiones(comunas, regiones, tri) {
     const enRegion = comunas.filter((c) => c.pais === 'CL' && sinTilde(c.subtitulo ?? c.titulo) === sinTilde(nombre))
     // Solo servicios de telecomunicaciones pintan el semáforo (una caída de un banco o de Microsoft 365 no es una caída de internet).
     const detalle = enRegion.flatMap((c) => c.detalle).filter(esTelecom)
-    const gravedad = detalle.reduce((g, f) => peor(g, f.gravedad), 'normal')
+    const gravedadBruta = detalle.reduce((g, f) => peor(g, f.gravedad), 'normal')
     const porEmpresa = new Map()
     for (const f of detalle) porEmpresa.set(f.empresa, (porEmpresa.get(f.empresa) ?? 0) + (f.cantidad_reportes ?? 0))
     const principales = [...porEmpresa].sort((a, b) => b[1] - a[1]).slice(0, 2).map(([e, n]) => `${e} ${n}`)
     const confirmado = detalle.some((f) => f.gravedad !== 'normal' && (verifDe(tri, f).confirmado || f.fuente === 'ioda'))
+    // Rojo solo con falla confirmada (2+ fuentes), igual que las tarjetas por compañía; con 1 fuente queda en amarillo.
+    const gravedad = gravedadBruta === 'falla_masiva' && !confirmado ? 'posibles_problemas' : gravedadBruta
     return { nombre, gravedad, total: detalle.reduce((s, f) => s + (f.cantidad_reportes ?? 0), 0), principales, confirmado }
   }).sort((a, b) => ORDEN[b.gravedad] - ORDEN[a.gravedad] || b.total - a.total)
 }

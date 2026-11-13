@@ -672,6 +672,8 @@ button.kpi-chip { font: inherit; font-size: 13px; cursor: pointer; }
 .tarjeta-empresa.operativa { border-top-color: var(--verde); }
 .tarjeta-empresa.operativa .te-estado i { background: var(--verde); box-shadow: 0 0 6px var(--verde); }
 .tarjeta-empresa.sin_datos { opacity: 0.75; border-top-style: dashed; }
+.tarjeta-empresa.aislados { border-top-color: var(--naranjo); border-top-style: dashed; }
+.tarjeta-empresa.aislados .te-estado i { background: transparent; border: 2px solid var(--naranjo); }
 
 /* Modo emergencia */
 .emergencia { max-width: 860px; margin: 0 auto; padding: 22px 16px 120px; display: grid; gap: 18px; }

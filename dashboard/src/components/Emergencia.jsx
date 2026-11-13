@@ -40,7 +40,7 @@ export default function Emergencia({ todas, luz, entorno, actualizado, abrirFich
             <button key={e.clave} className={`tarjeta-empresa ${e.estado}`} onClick={() => abrirFicha(e.empresa)}>
               <span className="te-nombre">{e.empresa}</span>
               <span className="te-estado"><i aria-hidden />{TEXTO_ESTADO_EMPRESA[e.estado]}</span>
-              <small>{e.conDatos === 0 ? 'Sin información en la última hora' : e.conFalla.length ? `${e.conFalla.length} de ${e.conDatos} fuentes ven falla` : `${e.conDatos} fuentes, ninguna ve falla`}</small>
+              <small>{e.conDatos === 0 ? 'Sin información en la última hora' : e.estado === 'aislados' ? 'Solo reportes de personas en OCN, sin confirmar' : e.conFalla.length ? `${e.conFalla.length} de ${e.conDatos} fuentes ven falla` : `${e.conDatos} fuentes, ninguna ve falla`}</small>
             </button>
           ))}
         </div>
