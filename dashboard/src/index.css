@@ -644,7 +644,7 @@ button.kpi-chip { font: inherit; font-size: 13px; cursor: pointer; }
 .ficha-fuentes { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
 .ficha-fuentes li { display: flex; justify-content: space-between; align-items: center; background: var(--panel-2); border-radius: 10px; padding: 8px 12px; }
 .ficha-fuentes small { display: block; color: var(--tenue); font-size: 12px; }
-.ficha-fuentes a { color: #8fd0ff; }
+.ficha-fuentes a, .ficha-lugares a, .popup-escala a { color: #8fd0ff; }
 .ficha-acciones { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 16px; }
 .ficha-acciones .btn-afecta { grid-column: 1 / -1; }
 .ficha-acciones .btn-sec { width: 100%; }
