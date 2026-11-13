@@ -1,4 +1,5 @@
 import { supabase } from './supabase'
+import { centroComuna } from './centroides'
 import { PAISES } from './geo'
 import { esTelecom } from './servicios'
 
@@ -189,28 +190,31 @@ export async function balanceVecinos(empresa, region, horas = 3) {
   return { funciona: ok.count ?? 0, falla: mal.count ?? 0 }
 }
 
-// Agrupa los reportes de vecinos por empresa, servicio y región, como filas
-// con el mismo formato que reportes_caidas (fuente "ocn"). Se cuentan, no se estiman.
+// Agrupa los reportes de vecinos como filas con el mismo formato que reportes_caidas (fuente "ocn").
+// Si el vecino escribió una comuna reconocida, el reporte se dibuja en el centro de esa comuna (nunca en su
+// ubicación exacta); si no, en el centro de su región. Se cuentan, no se estiman.
 export function resumirVecinos(vecinos, centros) {
   const grupos = new Map()
   for (const v of vecinos) {
-    const k = [v.empresa, v.servicio, v.region].join('|')
-    const g = grupos.get(k) ?? { ...v, n: 0, comunas: new Set(), ultimo: v.creado_en }
+    const cc = v.comuna ? centroComuna(v.comuna) : null
+    const k = [v.empresa, v.servicio, cc ? `c:${cc[0]}` : v.region].join('|')
+    const g = grupos.get(k) ?? { ...v, n: 0, cc, comunas: new Set(), ultimo: v.creado_en }
     g.n += 1
     if (v.tipo === 'lento') g.lentos = (g.lentos ?? 0) + 1
-    if (v.comuna) g.comunas.add(v.comuna)
+    if (v.comuna) g.comunas.add(cc ? cc[0] : v.comuna)
     if (v.creado_en > g.ultimo) g.ultimo = v.creado_en
     grupos.set(k, g)
   }
   return [...grupos.entries()].map(([k, g]) => {
-    const c = centros[g.region]
+    const c = g.cc ? [g.cc[1], g.cc[2]] : centros[g.region]
     return {
       id: `ocn|${k}`, hash_dedup: `ocn|${k}`, fuente: 'ocn', pais: 'CL', empresa: g.empresa, servicio: g.servicio,
-      comuna: null, region: g.region, latitud: c?.[0] ?? null, longitud: c?.[1] ?? null, precision_geo: 'region',
+      comuna: g.cc ? g.cc[0] : null, region: g.region, latitud: c?.[0] ?? null, longitud: c?.[1] ?? null,
+      precision_geo: g.cc ? 'comuna' : 'region',
       cantidad_reportes: g.n, gravedad: g.n >= 5 ? 'falla_masiva' : g.n >= 2 ? 'posibles_problemas' : 'normal',
       gravedad_texto: `${g.n} vecino(s) reportaron en OCN en las últimas ${HORAS_VENTANA} h` +
         (g.lentos ? ` · ${g.n - g.lentos} sin servicio, ${g.lentos} lento` : '') +
-        (g.comunas.size ? ` (${[...g.comunas].slice(0, 5).join(', ')})` : ''),
+        (!g.cc && g.comunas.size ? ` (${[...g.comunas].slice(0, 5).join(', ')})` : ''),
       ventana: g.ultimo, capturado_en: g.ultimo, url_fuente: null,
     }
   })
