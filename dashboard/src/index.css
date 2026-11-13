@@ -691,3 +691,4 @@ button.kpi-chip { font: inherit; font-size: 13px; cursor: pointer; }
 .em-numeros span { font-size: 12px; color: var(--tenue); }
 .kpi-chip.emergencia { cursor: pointer; border: 1px solid var(--rojo); color: var(--texto); font: inherit; }
 .nav-emergencia { color: #ff8a8d; }
+@media (max-width: 1050px) { .marca p { display: none; } }
