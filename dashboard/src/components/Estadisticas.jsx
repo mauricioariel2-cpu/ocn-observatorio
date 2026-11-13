@@ -103,7 +103,7 @@ export default function Estadisticas({ todas = [], vecinos }) {
       {error && <p className="error">No pude leer las estadísticas: {error}</p>}
 
       <div className="kpis">
-        <Kpi valor={cargando ? '…' : ahora} titulo="Personas reportando fallas" detalle={ultimaHora ? 'en las últimas 24 h (Geoblackout)' : cargando ? 'cargando' : 'sin datos'} />
+        <Kpi valor={cargando ? '…' : ahora} titulo="Personas reportando fallas" detalle={ultimaHora ? 'en las últimas 24 horas' : cargando ? 'cargando' : 'sin datos'} />
         <Kpi valor={conFalla.length} titulo="Compañías con problemas ahora"
           detalle={conFalla.length ? `${conFalla.map((e) => e.empresa).slice(0, 3).join(', ')}${confirmadas ? '' : ' (sin confirmar)'}` : 'ninguna'}
           acento={confirmadas ? 'rojo' : conFalla.length ? 'naranjo' : 'verde'} />
@@ -247,7 +247,8 @@ function GraficoLineas({ series }) {
   const x = (i) => m.l + (horas.length === 1 ? iw / 2 : (i / (horas.length - 1)) * iw)
   const y = (v) => m.t + ih - (v / tope) * ih
   const ticks = [0, tope / 2, tope]
-  const cadaX = Math.max(1, Math.ceil(horas.length / Math.max(3, Math.floor(W / 110))))
+  const varios = horas.length > 26 // más de un día: el eje muestra también el día
+  const cadaX = Math.max(1, Math.ceil(horas.length / Math.max(3, Math.floor(W / (varios ? 150 : 110)))))
   const ultimoValor = (l) => l.valores.findLast((v) => v != null)
   const ultimos = lineas.map((l) => ({ ...l, yFin: y(ultimoValor(l)) })).sort((a, b) => a.yFin - b.yFin)
   for (let i = 1; i < ultimos.length; i++) if (ultimos[i].yFin - ultimos[i - 1].yFin < 13) ultimos[i].yFin = ultimos[i - 1].yFin + 13
@@ -273,7 +274,7 @@ function GraficoLineas({ series }) {
           </g>
         ))}
         {horas.map((h, i) => i % cadaX === 0 && (
-          <text key={i} x={x(i)} y={H - 8} className="eje" textAnchor="middle">{fmtHora(h)}</text>
+          <text key={i} x={x(i)} y={H - 8} className="eje" textAnchor="middle">{varios ? `${fmtDia(h)} ${fmtHora(h)}` : fmtHora(h)}</text>
         ))}
         {lineas.map((l) => (
           <g key={l.nombre}>
