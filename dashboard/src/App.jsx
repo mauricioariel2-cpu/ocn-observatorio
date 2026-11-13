@@ -9,6 +9,7 @@ const Estadisticas = lazy(() => import('./components/Estadisticas'))
 const CortesLuz = lazy(() => import('./components/CortesLuz'))
 const Privacidad = lazy(() => import('./components/Privacidad'))
 const FichaCaida = lazy(() => import('./components/FichaCaida'))
+const Emergencia = lazy(() => import('./components/Emergencia'))
 const Cargando = () => <p className="tenue" style={{ padding: 24 }}>Cargando…</p>
 import { cargarCortesLuz } from './lib/luz'
 import { indiceLuz } from './lib/causa'
@@ -26,7 +27,7 @@ export default function App() {
   const [error, setError] = useState(null)
   const [actualizado, setActualizado] = useState(null)
   const [enVivo, setEnVivo] = useState(false)
-  const [vista, setVista] = useState('chile')
+  const [vista, setVista] = useState(() => (location.hash === '#emergencia' ? 'emergencia' : 'chile'))
   const [panelAbierto, setPanelAbierto] = useState(false)
   const [nuevos, setNuevos] = useState(() => new Set())
   const [vecinos, setVecinos] = useState([])
@@ -118,7 +119,13 @@ export default function App() {
   const enRojo = semaforo.filter((r) => r.gravedad === 'falla_masiva').length
   const enAmarillo = semaforo.filter((r) => r.gravedad === 'posibles_problemas').length
   const reportesChile = paises.find((p) => p.pais === 'CL')?.total ?? 0
-  const ir = (v) => { setVista(v); if (v !== 'chile' && v !== 'mundo') setPanelAbierto(false) }
+  const ir = (v) => {
+    setVista(v)
+    if (v !== 'chile' && v !== 'mundo') setPanelAbierto(false)
+    // El modo emergencia tiene su propia dirección para compartirla: ocn-chile.pages.dev/#emergencia
+    if (v === 'emergencia') history.replaceState(null, '', '#emergencia')
+    else if (location.hash === '#emergencia') history.replaceState(null, '', location.pathname + location.search)
+  }
   const enMapa = vista === 'chile' || vista === 'mundo' || VISTAS_PAIS.some(([v]) => v === vista)
   const internacional = useMemo(() => coincidencias(todas), [todas])
 
@@ -141,6 +148,7 @@ export default function App() {
           {NAV.map(([v, t]) => (
             <button key={v} className={vista === v || (v === 'mundo' && ['ar', 'pe', 'br'].includes(vista)) ? 'activo' : ''} onClick={() => ir(v)}>{t}</button>
           ))}
+          <button className={`nav-emergencia ${vista === 'emergencia' ? 'activo' : ''}`} onClick={() => ir('emergencia')}>Emergencia</button>
           <button className={vista === 'privacidad' ? 'activo' : ''} onClick={() => ir('privacidad')}>Privacidad</button>
         </nav>
         <span className={`vivo ${enVivo ? 'on' : ''}`} title={enVivo ? 'Conectado en vivo' : 'Actualizando cada minuto'}>
@@ -157,6 +165,7 @@ export default function App() {
             {enRojo ? <><b>{enRojo}</b> en rojo</> : enAmarillo ? <><b>{enAmarillo}</b> en amarillo</> : <>Todo Chile en verde</>}
           </span>
           <span className="kpi-chip"><b>{reportesChile.toLocaleString('es-CL')}</b> reportes · 3 h</span>
+          <button className="kpi-chip emergencia" onClick={() => ir('emergencia')}>🆘 Modo emergencia</button>
           {luz.hora && (
             <button className="kpi-chip electrico" onClick={() => ir('luz')}>
               ⚡ <b>{luz.total.toLocaleString('es-CL')}</b> sin luz
@@ -185,6 +194,7 @@ export default function App() {
       )}
 
       {vista === 'tendencias' && <main className="contenido scroll"><Suspense fallback={<Cargando />}><Estadisticas nacional={nacional} vecinos={vecinos} /></Suspense></main>}
+      {vista === 'emergencia' && <main className="contenido scroll"><Suspense fallback={<Cargando />}><Emergencia todas={todas} luz={luz} entorno={entorno} actualizado={actualizado} abrirFicha={abrirFicha} verLuz={() => ir('luz')} /></Suspense></main>}
       {vista === 'privacidad' && <main className="contenido scroll"><Suspense fallback={<Cargando />}><Privacidad /></Suspense></main>}
       {vista === 'luz' && (
         <main className="contenido scroll">
