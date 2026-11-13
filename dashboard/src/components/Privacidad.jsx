@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { avisoGuardado, desactivarAviso } from '../lib/avisos'
 import {
   FECHA_POLITICA, RETENCION_DIAS, VERSION_POLITICA, borrarMisDatos, consentimiento, datosLocales, descargarJSON,
   dispositivoExistente, enviarSolicitud, misDatos, retirarConsentimiento,
@@ -65,6 +66,7 @@ export default function Privacidad() {
       <header>
         <h2>Privacidad y tus datos</h2>
         <p className="pv-sub">Política de tratamiento de datos personales · versión {VERSION_POLITICA} · {FECHA_POLITICA}</p>
+        <AvisoActivo />
         <p className="pv-lead">
           OCN no te pide nombre, RUT, correo ni teléfono para reportar. Lo que envías se usa para mostrar dónde hay fallas
           y contar cuántas personas están afectadas. Aquí puedes ver, descargar o borrar lo tuyo cuando quieras.
@@ -120,6 +122,8 @@ export default function Privacidad() {
             p="Mostrar la falla en el mapa, contar personas afectadas y estadísticas" b="Tu consentimiento (art. 12)" t="Visible al público 24 h; luego queda como estadística anónima" />
           <Fila d="Señal «Me funciona bien»: compañía, servicio, región y comuna (opcional), hora"
             p="Saber cuánta gente está conectada sin problemas, para detectar caídas con más certeza (línea base)" b="Tu consentimiento (art. 12)" t="Visible al público 24 h; luego queda como estadística anónima" />
+          <Fila d="Aviso de caídas (si lo activas): la dirección de entrega que crea tu navegador, la compañía y la región elegidas. Sin correo ni teléfono"
+            p="Avisarte cuando se cae tu compañía en tu región" b="Tu consentimiento (lo das al activar el aviso)" t="Hasta que lo desactives, borres tus datos o pasen 180 días sin uso" />
           <Fila d="Ubicación aproximada (redondeada a ~1 km), solo si tocas “usar mi ubicación” y tu navegador lo permite"
             p="Sugerir tu región y ubicar mejor la falla. No es pública" b="Tu consentimiento" t={`Se borra a los ${RETENCION_DIAS} días`} />
           <Fila d="Código aleatorio del celular (no es tu número ni tu identidad)"
@@ -246,5 +250,16 @@ function Fila({ d, p, b, t }) {
       <span role="cell" data-t="Base legal">{b}</span>
       <span role="cell" data-t="Plazo">{t}</span>
     </div>
+  )
+}
+
+// Si este celular tiene un aviso de caídas activo, se puede desactivar aquí en un toque.
+function AvisoActivo() {
+  const [aviso, setAviso] = useState(avisoGuardado)
+  if (!aviso) return null
+  return (
+    <p className="pv-aviso">🔔 Tienes activado el aviso de caídas de {aviso.empresa} en {aviso.region}.{' '}
+      <button type="button" className="btn-link" onClick={async () => { await desactivarAviso().catch(() => {}); setAviso(null) }}>Desactivar aviso</button>
+    </p>
   )
 }

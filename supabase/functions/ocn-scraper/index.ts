@@ -1351,6 +1351,106 @@ async function guardarEstadoPaises(status: { countries?: Record<string, PaisBM> 
   await rest("estado_paises?on_conflict=cc", { method: "POST", headers: { Prefer: "resolution=merge-duplicates,return=minimal" }, body: JSON.stringify(filas) });
 }
 
+// ── Avisos Web Push sin librerías (RFC 8291 cifrado aes128gcm + RFC 8292 VAPID), solo WebCrypto ──
+const b64u = (b: ArrayBuffer | Uint8Array) => btoa(String.fromCharCode(...new Uint8Array(b instanceof Uint8Array ? b : new Uint8Array(b)))).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+const deB64u = (s: string) => Uint8Array.from(atob(s.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((s.length + 3) % 4)), (c) => c.charCodeAt(0));
+const unir = (...partes: Uint8Array[]) => { const r = new Uint8Array(partes.reduce((n, p) => n + p.length, 0)); let i = 0; for (const p of partes) { r.set(p, i); i += p.length; } return r; };
+const txt = (s: string) => new TextEncoder().encode(s);
+async function hmac(clave: Uint8Array, datos: Uint8Array) {
+  const k = await crypto.subtle.importKey("raw", clave, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  return new Uint8Array(await crypto.subtle.sign("HMAC", k, datos));
+}
+
+async function generarVapid() {
+  const par = await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, ["sign", "verify"]);
+  const publica = b64u(await crypto.subtle.exportKey("raw", par.publicKey));
+  const privada = JSON.stringify(await crypto.subtle.exportKey("jwk", par.privateKey));
+  return { publica, privada };
+}
+
+async function jwtVapid(endpoint: string, privadaJwk: string, contacto: string) {
+  const clave = await crypto.subtle.importKey("jwk", JSON.parse(privadaJwk), { name: "ECDSA", namedCurve: "P-256" }, false, ["sign"]);
+  const cab = b64u(txt(JSON.stringify({ typ: "JWT", alg: "ES256" })));
+  const cuerpo = b64u(txt(JSON.stringify({ aud: new URL(endpoint).origin, exp: Math.floor(Date.now() / 1000) + 12 * 3600, sub: contacto })));
+  const firma = await crypto.subtle.sign({ name: "ECDSA", hash: "SHA-256" }, clave, txt(`${cab}.${cuerpo}`));
+  return `${cab}.${cuerpo}.${b64u(firma)}`;
+}
+
+async function cifrarAviso(p256dh: string, auth: string, mensaje: Uint8Array) {
+  const uaPublica = deB64u(p256dh);
+  const secretoAuth = deB64u(auth);
+  const efimero = await crypto.subtle.generateKey({ name: "ECDH", namedCurve: "P-256" }, true, ["deriveBits"]);
+  const asPublica = new Uint8Array(await crypto.subtle.exportKey("raw", efimero.publicKey));
+  const uaClave = await crypto.subtle.importKey("raw", uaPublica, { name: "ECDH", namedCurve: "P-256" }, false, []);
+  const ecdh = new Uint8Array(await crypto.subtle.deriveBits({ name: "ECDH", public: uaClave }, efimero.privateKey, 256));
+  const prkClave = await hmac(secretoAuth, ecdh);
+  const ikm = await hmac(prkClave, unir(txt("WebPush: info\0"), uaPublica, asPublica, new Uint8Array([1])));
+  const sal = crypto.getRandomValues(new Uint8Array(16));
+  const prk = await hmac(sal, ikm);
+  const cek = (await hmac(prk, unir(txt("Content-Encoding: aes128gcm\0"), new Uint8Array([1])))).slice(0, 16);
+  const nonce = (await hmac(prk, unir(txt("Content-Encoding: nonce\0"), new Uint8Array([1])))).slice(0, 12);
+  const k = await crypto.subtle.importKey("raw", cek, "AES-GCM", false, ["encrypt"]);
+  const cifrado = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv: nonce }, k, unir(mensaje, new Uint8Array([2]))));
+  const cab = new Uint8Array(21); cab.set(sal, 0); new DataView(cab.buffer).setUint32(16, 4096); cab[20] = asPublica.length;
+  return unir(cab, asPublica, cifrado);
+}
+
+async function enviarAviso(s: { endpoint: string; p256dh: string; auth: string }, datos: unknown, vapid: { publica: string; privada: string }, contacto: string) {
+  const cuerpo = await cifrarAviso(s.p256dh, s.auth, txt(JSON.stringify(datos)));
+  const jwt = await jwtVapid(s.endpoint, vapid.privada, contacto);
+  return fetch(s.endpoint, {
+    method: "POST",
+    headers: { Authorization: `vapid t=${jwt}, k=${vapid.publica}`, "Content-Encoding": "aes128gcm", "Content-Type": "application/octet-stream", TTL: "3600", Urgency: "high" },
+    body: cuerpo,
+  });
+}
+
+// Cuando hay falla masiva de una compañía (servicios de telecom), avisa a quienes se suscribieron a esa
+// compañía en esa región (o en todo Chile si la falla es de la red de la compañía a nivel país).
+const SERVICIOS_TELECOM = new Set(["internet", "internet_fijo", "internet_movil", "tv", "telefonia", "telefonia_fija"]);
+const WEB = "https://ocn-chile.pages.dev";
+const claveEmp = (e: unknown) => sinTildes(String(e ?? "")).split(/[\s(]+/)[0];
+
+async function enviarAvisos(filas: Fila[]): Promise<string | number> {
+  const pares = new Map<string, { empresa: string; region: string | null; nombre: string; fuente: string }>();
+  for (const f of filas) {
+    if (f.pais !== "CL" || f.gravedad !== "falla_masiva" || f.empresa === "Red completa") continue;
+    if (!SERVICIOS_TELECOM.has(String(f.servicio ?? "internet"))) continue;
+    const empresa = claveEmp(f.empresa);
+    if (!empresa) continue;
+    const region = (f.region as string | null) ?? null;
+    pares.set(`${empresa}|${region ?? ""}`, { empresa, region, nombre: String(f.empresa).split(/[\s(]+/)[0], fuente: String(f.fuente) });
+  }
+  if (!pares.size) return 0;
+  let vapid = await rest("rpc/ocn_vapid_claves", { method: "POST", body: "{}" });
+  if (!vapid?.publica) {
+    const nuevas = await generarVapid();
+    await rest("rpc/ocn_vapid_guardar", { method: "POST", body: JSON.stringify({ p_publica: nuevas.publica, p_privada: nuevas.privada }) });
+    vapid = await rest("rpc/ocn_vapid_claves", { method: "POST", body: "{}" });
+  }
+  const subs: { endpoint: string; p256dh: string; auth: string; empresa: string; region: string }[] = await rest("rpc/ocn_avisos_pendientes", {
+    method: "POST", body: JSON.stringify({ p_pares: [...pares.values()].map(({ empresa, region }) => ({ empresa, region })) }),
+  });
+  let enviados = 0;
+  for (const s of subs) {
+    const clave = sinTildes(s.empresa);
+    const par = pares.get(`${clave}|${s.region}`) ?? pares.get(`${clave}|`);
+    const enRegion = pares.has(`${clave}|${s.region}`);
+    const datos = {
+      title: `Posible caída de ${s.empresa}${enRegion ? ` en ${s.region}` : ""}`,
+      body: `${enRegion ? "Muchos vecinos están reportando fallas" : "Las mediciones de red detectan una falla de la compañía"}. Toca para ver la ficha y reportar si te afecta.`,
+      url: `${WEB}/#caida/${clave}`, tag: `ocn-${clave}`, fuente: par?.fuente,
+    };
+    try {
+      const r = await enviarAviso(s, datos, vapid, WEB);
+      if (r.status === 404 || r.status === 410) await rest("rpc/ocn_cancelar_aviso", { method: "POST", body: JSON.stringify({ p_endpoint: s.endpoint }) });
+      else if (r.ok) enviados++;
+      await r.body?.cancel();
+    } catch (e) { console.error("aviso:", e instanceof Error ? e.message : e); }
+  }
+  return enviados;
+}
+
 async function corrida(): Promise<Record<string, unknown>> {
   // Freno: si hubo una captura hace menos de 10 min, no volvemos a pedir las páginas.
   const ult = await rest("reportes_caidas?select=capturado_en&order=capturado_en.desc&limit=1");
@@ -1380,6 +1480,7 @@ async function corrida(): Promise<Record<string, unknown>> {
     headers: { Prefer: "resolution=ignore-duplicates,return=representation" },
     body: JSON.stringify(filas),
   });
+  res.avisos = await enviarAvisos(filas).catch((e) => `error: ${e instanceof Error ? e.message : e}`);
   return {
     ...res,
     enviadas: filas.length,

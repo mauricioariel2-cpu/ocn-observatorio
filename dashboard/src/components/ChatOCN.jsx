@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { balanceVecinos, enviarFunciona, enviarReporte } from '../lib/datos'
+import { activarAviso, avisoGuardado, soportaAvisos } from '../lib/avisos'
 import { REGIONES_CL } from '../lib/geo'
 import { detectarCompania } from '../lib/isp'
 import { dispositivo, guardarPerfil, leerPerfil } from '../lib/perfil'
@@ -92,6 +93,27 @@ export default function ChatOCN({ contar, abierto, setAbierto, verMapa, verPriva
     } else preguntaServicio()
   }
 
+  // Botón "Avísame": solo si el navegador lo permite, la compañía es conocida y aún no está activado igual.
+  function botonAviso() {
+    const d = datos.current
+    const ya = avisoGuardado()
+    if (!soportaAvisos() || !d.empresa || d.empresa === 'Otro' || (ya?.empresa === d.empresa && ya?.region === d.region)) return []
+    return [[`🔔 Avísame si se cae ${d.empresa}`, avisarme]]
+  }
+
+  async function avisarme() {
+    const d = datos.current
+    setOpciones(null)
+    yo(`🔔 Avísame si se cae ${d.empresa}`)
+    try {
+      await activarAviso(d.empresa, d.region)
+      await bot(`Listo 🔔 Te aviso en este celular si muchos vecinos reportan una caída de **${d.empresa}** en ${d.region}, o si las mediciones de red detectan una falla de la compañía.`, 'Sin cuenta ni correo. Puedes desactivarlo en Privacidad.')
+    } catch (e) {
+      await bot(`No pude activar el aviso: ${e.message}`)
+    }
+    preguntar({ tipo: 'botones', items: [['Ver el mapa', () => { setAbierto(false); verMapa?.() }], ['Reportar un problema', preguntaEstado]] })
+  }
+
   async function enviarOk() {
     aceptar()
     const d = datos.current
@@ -109,7 +131,7 @@ export default function ChatOCN({ contar, abierto, setAbierto, verMapa, verPriva
         b ? `En las últimas 3 horas, en ${d.region}: **${b.funciona}** vecino${b.funciona === 1 ? '' : 's'} dice${b.funciona === 1 ? '' : 'n'} que ${d.empresa} funciona y **${b.falla}** reporta${b.falla === 1 ? '' : 'n'} falla.` : null,
         'Tu señal sirve: así el OCN distingue una caída real de un problema aislado. Si se cae, vuelve aquí y reportar toma 10 segundos.',
       )
-      preguntar({ tipo: 'botones', items: [['Ver el mapa', () => { setAbierto(false); verMapa?.() }], ['Reportar un problema', preguntaEstado]] })
+      preguntar({ tipo: 'botones', items: [...botonAviso(), ['Ver el mapa', () => { setAbierto(false); verMapa?.() }], ['Reportar un problema', preguntaEstado]] })
     } catch (e) {
       setEscribiendo(false)
       await bot(e.message)
@@ -205,7 +227,7 @@ export default function ChatOCN({ contar, abierto, setAbierto, verMapa, verPriva
         ...(otras > 0 ? [`Otros sitios de reportes registran además ${otras} reporte${otras === 1 ? '' : 's'} de ${d.empresa} en ${d.region}.`] : []),
         'Mientras más personas reporten, más fuerza tiene el reclamo ante la compañía y SUBTEL. Comparte OCN con tus vecinos 🙏',
       )
-      preguntar({ tipo: 'botones', items: [['📝 Armar mi reclamo', armarReclamo], ['Compartir por WhatsApp', compartir], ['Ver el mapa', () => { setAbierto(false); verMapa?.() }]] })
+      preguntar({ tipo: 'botones', items: [['📝 Armar mi reclamo', armarReclamo], ...botonAviso(), ['Compartir por WhatsApp', compartir], ['Ver el mapa', () => { setAbierto(false); verMapa?.() }]] })
     } catch (e) {
       setEscribiendo(false)
       await bot(`No pude registrar el reporte: ${e.message}`)

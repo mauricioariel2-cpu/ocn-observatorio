@@ -1,6 +1,7 @@
 // Ley 21.719: consentimiento informado y derechos de la persona (acceso, portabilidad,
 // supresión) sobre lo que OCN guarda asociado al código aleatorio de este celular.
 import { supabase } from './supabase'
+import { desactivarAviso } from './avisos'
 
 export const VERSION_POLITICA = '1.1'
 export const FECHA_POLITICA = '9 de noviembre de 2026'
@@ -61,6 +62,7 @@ export async function borrarMisDatos(id = dispositivoExistente()) {
     if (error) throw new Error(error.message)
     servidor = data
   }
+  await desactivarAviso().catch(() => {}) // también se anula la suscripción a avisos, si había
   borrarLocales()
   return servidor
 }
