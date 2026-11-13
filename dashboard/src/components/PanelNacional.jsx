@@ -2,6 +2,7 @@ const ETIQUETA = { falla_masiva: 'Falla masiva', posibles_problemas: 'Posibles p
 
 import { FUENTES_TOTALES, semaforoRegiones } from '../lib/datos'
 import { REGIONES_CL } from '../lib/geo'
+import { TEXTO_ESTADO_EMPRESA, estadoEmpresas } from '../lib/estadoEmpresas'
 import { FUENTE_CONEXIONES, REGLA_SEMAFORO_COMUNA, semaforoComunas } from '../lib/conexiones'
 import { ICONO_CAUSA, alcance, causaDeEmpresa, indiceLuz } from '../lib/causa'
 
@@ -23,6 +24,22 @@ export default function PanelNacional({ comunas, paises, nacional, tri, todas = 
 
       <div className="panel-cuerpo">
         {error && <p className="error">No pude leer los datos: {error}</p>}
+
+        <h2>Estado por compañía</h2>
+        <div className="tarjetas-empresas">
+          {estadoEmpresas(todas).map((e) => (
+            <button key={e.clave} className={`tarjeta-empresa ${e.estado}`} onClick={() => abrirFicha?.(e.empresa)}
+              aria-label={`${e.empresa}: ${TEXTO_ESTADO_EMPRESA[e.estado]}. Ver ficha`}>
+              <span className="te-nombre">{e.empresa}</span>
+              <span className="te-estado"><i aria-hidden />{TEXTO_ESTADO_EMPRESA[e.estado]}</span>
+              <small>{e.conDatos === 0 ? 'Ninguna fuente informó en la última hora'
+                : e.conFalla.length ? `${e.conFalla.length} de ${e.conDatos} fuentes ven falla: ${nombres(new Set(e.conFalla))}`
+                : `${e.conDatos} ${e.conDatos === 1 ? 'fuente' : 'fuentes'} con datos, ninguna ve falla`}</small>
+              {e.clientes && <small>{(e.clientes.grupo ?? e.empresa)}: {e.clientes.n.toLocaleString('es-CL')} clientes fijos</small>}
+            </button>
+          ))}
+        </div>
+        <p className="pie">Caída confirmada: 2 o más fuentes independientes ven falla en la última hora. Con problemas: 1 sola fuente. Operativa: hay datos y ninguna fuente ve falla. Sin datos: no podemos decir que esté bien. Clientes fijos: SUBTEL, junio de 2026.</p>
 
         <h2>Verificación cruzada</h2>
         {verif.length === 0 && <p className="vacio">Ninguna fuente reporta fallas en la última hora.</p>}
