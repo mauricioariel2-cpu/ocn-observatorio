@@ -4,6 +4,7 @@ import { dispositivo, guardarPerfil, leerPerfil } from '../lib/perfil'
 import { aceptar } from '../lib/privacidad'
 import NoEresElUnico from './NoEresElUnico'
 import { REGIONES_CL } from '../lib/geo'
+import { ALCANCES, EMPRESAS_TV, SINTOMAS, TECNOLOGIAS, TECNOLOGIA_FIJA, limpiarCodigo } from '../lib/tv'
 
 const EMPRESAS = ['Movistar', 'Entel', 'VTR', 'Claro', 'WOM', 'GTD', 'Mundo', 'Telsur', 'Starlink', 'DIRECTV', 'Otro']
 const SERVICIOS = [['internet_fijo', 'Internet hogar'], ['internet_movil', 'Internet móvil'], ['tv', 'TV'], ['telefonia', 'Telefonía']]
@@ -25,6 +26,11 @@ export default function ReportarFalla({ abierto, cerrar, regionInicial, alEnviar
   const [region, setRegion] = useState(recordado?.region ?? '')
   const [comuna, setComuna] = useState(recordado?.comuna ?? '')
   const [coords, setCoords] = useState(null)
+  // Solo para TV pagada: campos cerrados para poder ordenar y filtrar los reportes.
+  const [tv, setTv] = useState({ tecnologia: '', alcance: '', sintoma: '', codigo: '' })
+  const esTv = servicio === 'tv'
+  const tecnologia = TECNOLOGIA_FIJA[empresa] ?? tv.tecnologia
+  const listaEmpresas = esTv ? EMPRESAS_TV : EMPRESAS
   const [estado, setEstado] = useState({ tipo: 'idle' })
   // Antibots: un campo trampa invisible (las personas no lo ven ni lo llenan) y un tiempo mínimo
   // desde que se abre el formulario. Además, la base de datos limita a 1 reporte cada 30 min por dispositivo.
@@ -60,12 +66,14 @@ export default function ReportarFalla({ abierto, cerrar, regionInicial, alEnviar
   async function enviar(e) {
     e.preventDefault()
     if (!empresa || !region) return setEstado({ tipo: 'error', msg: 'Elige tu compañía y tu región.' })
+    if (esTv && (!tecnologia || !tv.alcance || !tv.sintoma)) return setEstado({ tipo: 'error', msg: 'Cuéntanos cómo te llega la TV, qué canales fallan y qué ves en pantalla.' })
     if (trampa || Date.now() - abiertoEn < 1500) return setEstado({ tipo: 'error', msg: 'Espera un segundo y vuelve a intentarlo.' })
     aceptar()
     setEstado({ tipo: 'enviando' })
     try {
       const perfil = { empresa, servicio, region, comuna: comuna.trim() || null }
-      await enviarReporte({ ...perfil, latitud: coords?.lat ?? null, longitud: coords?.lon ?? null, dispositivo: dispositivo() })
+      const camposTv = esTv ? { tv_tecnologia: tecnologia, tv_alcance: tv.alcance, tv_sintoma: tv.sintoma, tv_codigo: tv.sintoma === 'mensaje' ? limpiarCodigo(tv.codigo) : null } : {}
+      await enviarReporte({ ...perfil, ...camposTv, latitud: coords?.lat ?? null, longitud: coords?.lon ?? null, dispositivo: dispositivo() })
       guardarPerfil(perfil) // la próxima vez basta un toque
       setEstado({ tipo: 'ok', ...(await contar(empresa, region)) })
       alEnviar?.()
@@ -113,15 +121,35 @@ export default function ReportarFalla({ abierto, cerrar, regionInicial, alEnviar
             <label>Compañía
               <select value={empresa} onChange={(e) => setEmpresa(e.target.value)} required>
                 <option value="">Elige…</option>
-                {EMPRESAS.map((x) => <option key={x}>{x}</option>)}
+                {listaEmpresas.map((x) => <option key={x}>{x}</option>)}
               </select>
             </label>
             <fieldset className="chips">
               <legend>Servicio</legend>
               {SERVICIOS.map(([v, t]) => (
-                <button type="button" key={v} className={servicio === v ? 'activo' : ''} onClick={() => setServicio(v)}>{t}</button>
+                <button type="button" key={v} className={servicio === v ? 'activo' : ''} onClick={() => { setServicio(v); if (!(v === 'tv' ? EMPRESAS_TV : EMPRESAS).includes(empresa)) setEmpresa('') }}>{t}</button>
               ))}
             </fieldset>
+            {esTv && (
+              <div className="tv-campos">
+                {!TECNOLOGIA_FIJA[empresa] && (
+                  <fieldset className="chips"><legend>¿Cómo te llega la TV?</legend>
+                    {Object.entries(TECNOLOGIAS).map(([v, t]) => <button type="button" key={v} className={tv.tecnologia === v ? 'activo' : ''} onClick={() => setTv({ ...tv, tecnologia: v })}>{t}</button>)}
+                  </fieldset>
+                )}
+                <fieldset className="chips"><legend>¿Qué canales fallan?</legend>
+                  {Object.entries(ALCANCES).map(([v, t]) => <button type="button" key={v} className={tv.alcance === v ? 'activo' : ''} onClick={() => setTv({ ...tv, alcance: v })}>{t}</button>)}
+                </fieldset>
+                <fieldset className="chips"><legend>¿Qué ves en la pantalla?</legend>
+                  {Object.entries(SINTOMAS).map(([v, t]) => <button type="button" key={v} className={tv.sintoma === v ? 'activo' : ''} onClick={() => setTv({ ...tv, sintoma: v })}>{t}</button>)}
+                </fieldset>
+                {tv.sintoma === 'mensaje' && (
+                  <label>Código o mensaje (opcional)
+                    <input value={tv.codigo} onChange={(e) => setTv({ ...tv, codigo: e.target.value })} maxLength={20} placeholder="Ej: 771" />
+                  </label>
+                )}
+              </div>
+            )}
             <label>Región
               <select value={region} onChange={(e) => setRegion(e.target.value)} required>
                 <option value="">Elige…</option>

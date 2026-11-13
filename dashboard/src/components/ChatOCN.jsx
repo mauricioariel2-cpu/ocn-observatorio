@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { balanceVecinos, enviarFunciona, enviarReporte } from '../lib/datos'
+import { ALCANCES, EMPRESAS_TV, SINTOMAS, TECNOLOGIAS, TECNOLOGIA_FIJA, limpiarCodigo } from '../lib/tv'
 import { activarAviso, avisoGuardado, soportaAvisos } from '../lib/avisos'
 import { REGIONES_CL } from '../lib/geo'
 import { detectarCompania } from '../lib/isp'
@@ -160,7 +161,7 @@ export default function ChatOCN({ contar, abierto, setAbierto, verMapa, verPriva
 
   async function listaEmpresas() {
     await bot('¿Cuál es tu compañía?')
-    preguntar({ tipo: 'botones', items: EMPRESAS.map((e) => [e, () => { datos.current.empresa = e; datos.current.detectada = e === red.current?.empresa; preguntaRegion() }]) })
+    preguntar({ tipo: 'botones', items: (datos.current.servicio === 'tv' ? EMPRESAS_TV : EMPRESAS).map((e) => [e, () => { datos.current.empresa = e; datos.current.detectada = e === red.current?.empresa; preguntaRegion() }]) })
   }
 
   async function preguntaRegion() {
@@ -198,8 +199,30 @@ export default function ChatOCN({ contar, abierto, setAbierto, verMapa, verPriva
     preguntar({ tipo: 'texto', placeholder: 'Ej: Maipú', saltar: 'Prefiero no decir' })
   }
 
-  async function preguntaDesde() {
+  // TV pagada: tres preguntas cerradas (y un código opcional) para que los reportes se puedan ordenar y filtrar.
+  async function preguntaTv() {
+    const d = datos.current
+    d.tv = { tecnologia: TECNOLOGIA_FIJA[d.empresa] ?? null }
+    if (!d.tv.tecnologia) {
+      await bot('¿Cómo te llega la TV?')
+      preguntar({ tipo: 'botones', items: Object.entries(TECNOLOGIAS).map(([v, t]) => [t, () => { d.tv.tecnologia = v; tvAlcance() }]) })
+    } else tvAlcance()
+  }
+  async function tvAlcance() {
+    await bot('¿Qué canales fallan?')
+    preguntar({ tipo: 'botones', items: Object.entries(ALCANCES).map(([v, t]) => [t, () => { datos.current.tv.alcance = v; tvSintoma() }]) })
+  }
+  async function tvSintoma() {
+    await bot('¿Qué ves en la pantalla?')
+    preguntar({ tipo: 'botones', items: Object.entries(SINTOMAS).map(([v, t]) => [t, () => {
+      datos.current.tv.sintoma = v
+      if (v === 'mensaje') { bot('¿Qué código o mensaje aparece? (por ejemplo 771)').then(() => preguntar({ tipo: 'codigo' })) } else preguntaDesde(true)
+    }]) })
+  }
+
+  async function preguntaDesde(tvListo = false) {
     if (datos.current.tipo === 'funciona') { enviarOk(); return }
+    if (datos.current.servicio === 'tv' && tvListo !== true) { preguntaTv(); return }
     await bot('¿Desde cuándo tienes el problema?')
     preguntar({ tipo: 'botones', items: Object.entries(DESDE).map(([v, t]) => [t, () => { datos.current.desde = v; enviar() }]) })
   }
@@ -212,6 +235,7 @@ export default function ChatOCN({ contar, abierto, setAbierto, verMapa, verPriva
       await enviarReporte({
         empresa: d.empresa, servicio: d.servicio, region: d.region, comuna: d.comuna || null,
         tipo: d.tipo, empresa_detectada: !!d.detectada, desde: d.desde ?? null,
+        ...(d.servicio === 'tv' && d.tv ? { tv_tecnologia: d.tv.tecnologia, tv_alcance: d.tv.alcance, tv_sintoma: d.tv.sintoma, tv_codigo: d.tv.codigo ?? null } : {}),
         latitud: d.lat ?? null, longitud: d.lon ?? null, dispositivo: dispositivo(),
       })
       guardarPerfil({ empresa: d.empresa, servicio: d.servicio, region: d.region, comuna: d.comuna || null })
@@ -445,6 +469,19 @@ export default function ChatOCN({ contar, abierto, setAbierto, verMapa, verPriva
             <input name="t" placeholder={opciones.placeholder} autoComplete="address-level2" maxLength={60} autoFocus />
             <button type="submit" aria-label="Enviar">➤</button>
             <button type="button" className="saltar" onClick={() => { datos.current.comuna = null; responder(opciones.saltar, preguntaDesde) }}>{opciones.saltar}</button>
+          </form>
+        )}
+        {opciones?.tipo === 'codigo' && (
+          <form className="chat-texto" onSubmit={(e) => {
+            e.preventDefault()
+            const v = limpiarCodigo(new FormData(e.currentTarget).get('c'))
+            if (!v) return
+            datos.current.tv.codigo = v
+            responder(v, () => preguntaDesde(true))
+          }}>
+            <input name="c" placeholder="Ej: 771" maxLength={20} autoFocus autoComplete="off" />
+            <button type="submit" aria-label="Enviar">➤</button>
+            <button type="button" className="saltar" onClick={() => { datos.current.tv.codigo = null; responder('No recuerdo', () => preguntaDesde(true)) }}>No recuerdo</button>
           </form>
         )}
         {opciones?.tipo === 'folio' && (

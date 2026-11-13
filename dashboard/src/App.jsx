@@ -212,6 +212,7 @@ export default function App() {
           nacional={nacional}
           tri={tri}
           todas={todas}
+          vecinos={vecinos}
           idxLuz={idxLuz}
           abrirFicha={abrirFicha}
           actualizado={actualizado}

@@ -692,3 +692,10 @@ button.kpi-chip { font: inherit; font-size: 13px; cursor: pointer; }
 .kpi-chip.emergencia { cursor: pointer; border: 1px solid var(--rojo); color: var(--texto); font: inherit; }
 .nav-emergencia { color: #ff8a8d; }
 @media (max-width: 1050px) { .marca p { display: none; } }
+
+/* TV pagada */
+.tv-campos { display: grid; gap: 8px; }
+.tv-filtro { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 8px; }
+.tv-filtro button { font: inherit; font-size: 12px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--borde); background: var(--panel-2); color: var(--tenue); cursor: pointer; }
+.tv-filtro button.activo { color: var(--texto); border-color: var(--texto); }
+h2 small.tenue { font-weight: 400; font-size: 12px; }

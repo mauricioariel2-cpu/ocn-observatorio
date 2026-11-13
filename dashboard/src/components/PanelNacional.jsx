@@ -3,6 +3,7 @@ const ETIQUETA = { falla_masiva: 'Falla masiva', posibles_problemas: 'Posibles p
 import { FUENTES_TOTALES, semaforoRegiones } from '../lib/datos'
 import { REGIONES_CL } from '../lib/geo'
 import { TEXTO_ESTADO_EMPRESA, estadoEmpresas } from '../lib/estadoEmpresas'
+import TvPagada from './TvPagada'
 import { FUENTE_CONEXIONES, REGLA_SEMAFORO_COMUNA, semaforoComunas } from '../lib/conexiones'
 import { ICONO_CAUSA, alcance, causaDeEmpresa, indiceLuz } from '../lib/causa'
 
@@ -11,7 +12,7 @@ const LUZ = { falla_masiva: 'Rojo', posibles_problemas: 'Amarillo', normal: 'Ver
 const FUENTE = { geoblackout: 'Geoblackout', fallacl: 'FallaCL', ioda: 'IODA', blackoutmap: 'Blackout Map', atlas: 'RIPE Atlas', cloudflare: 'Cloudflare Radar', ocn: 'Vecinos OCN', downdetector: 'Downdetector' }
 const nombres = (set) => [...set].map((f) => FUENTE[f] ?? f).join(' + ')
 
-export default function PanelNacional({ comunas, paises, nacional, tri, todas = [], idxLuz = indiceLuz([]), abrirFicha, actualizado, error, abierto, alternar }) {
+export default function PanelNacional({ comunas, paises, nacional, tri, todas = [], vecinos = [], idxLuz = indiceLuz([]), abrirFicha, actualizado, error, abierto, alternar }) {
   const totalChile = paises.find((p) => p.pais === 'CL')?.total ?? 0
   const verif = [...tri.values()].filter((e) => e.pais === 'CL').sort((a, b) => b.fuentes.size - a.fuentes.size)
   return (
@@ -40,6 +41,8 @@ export default function PanelNacional({ comunas, paises, nacional, tri, todas = 
           ))}
         </div>
         <p className="pie">Caída confirmada: 2 o más fuentes independientes ven falla en la última hora. Con problemas: 1 sola fuente. Operativa: hay datos y ninguna fuente ve falla. Sin datos: no podemos decir que esté bien. Clientes fijos: SUBTEL, junio de 2026.</p>
+
+        <TvPagada vecinos={vecinos} abrirFicha={abrirFicha} />
 
         <h2>Verificación cruzada</h2>
         {verif.length === 0 && <p className="vacio">Ninguna fuente reporta fallas en la última hora.</p>}

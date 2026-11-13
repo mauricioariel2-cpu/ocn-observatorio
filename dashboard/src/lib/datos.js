@@ -162,7 +162,7 @@ export function verifDe(tri, f) {
 export async function cargarVecinos(horas = HORAS_VENTANA) {
   const { data, error } = await supabase
     .from('reportes_usuarios')
-    .select('id, creado_en, empresa, servicio, region, comuna, tipo, empresa_detectada')
+    .select('id, creado_en, empresa, servicio, region, comuna, tipo, empresa_detectada, tv_tecnologia, tv_alcance, tv_sintoma, tv_codigo')
     .gte('creado_en', desdeISO(horas))
     .order('creado_en', { ascending: false })
     .limit(5000)
