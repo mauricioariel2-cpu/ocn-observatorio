@@ -1,12 +1,14 @@
 import { claveEmpresa, verifDe } from './datos'
 import { esTelecom } from './servicios'
+import { LLUVIA_FUERTE_MM, RAFAGA_FUERTE_KMH, climaFuerte, sismoCerca } from './entorno'
 
 // ---------- Causa probable de una caída ----------
 // Idea inspirada en el Centro de caídas de Cloudflare Radar, que etiqueta cada caída con su causa y su alcance.
 // Aquí NUNCA se afirma una causa: se dice cuál es la más probable según datos reales que ya tiene el OCN,
 // y se cita la evidencia. Orden de prioridad:
 //   1. Corte de luz informado por la SEC en la misma comuna (o en la misma región, con menos certeza).
-//   2. Sondas dentro de la red de la compañía (IODA, Blackout Map, RIPE Atlas) que miden la caída.
+//   2. Sismo fuerte cercano (USGS) o temporal en la región (lluvia o ráfagas fuertes, Open-Meteo).
+//   3. Sondas dentro de la red de la compañía (IODA, Blackout Map, RIPE Atlas) que miden la caída.
 //   3. Solo reportes de personas: causa sin determinar.
 
 const sinTilde = (t) => String(t ?? '').normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase().trim()
@@ -20,7 +22,7 @@ export const MIN_CLIENTES_REGION = 5000
 
 
 // Índice de cortes de luz SEC por comuna y por región.
-export function indiceLuz(luz = []) {
+export function indiceLuz(luz = [], entorno = {}) {
   const comuna = new Map()
   const region = new Map()
   for (const c of luz) {
@@ -31,7 +33,7 @@ export function indiceLuz(luz = []) {
     r.comunas += 1
     region.set(k, r)
   }
-  return { comuna, region }
+  return { comuna, region, clima: entorno.clima ?? null, sismos: entorno.sismos ?? [] }
 }
 
 // Filas de medición de red (no de personas) con falla, por compañía.
@@ -42,7 +44,7 @@ function medicionesConFalla(filas, empresa) {
 }
 
 // Causa probable de UNA fila (una compañía en un lugar).
-// Devuelve { tipo: 'luz' | 'luz_region' | 'red' | 'personas', texto, evidencia } o null si la fila no es una falla.
+// Devuelve { tipo: 'luz' | 'luz_region' | 'sismo' | 'clima' | 'red' | 'personas', texto, evidencia } o null si la fila no es una falla.
 export function causaDeFila(f, filas, idx, tri) {
   if (!f || !f.gravedad || f.gravedad === 'normal') return null
   if ((f.pais ?? 'CL') === 'CL' && esTelecom(f)) {
@@ -60,6 +62,24 @@ export function causaDeFila(f, filas, idx, tri) {
         tipo: 'luz_region',
         texto: 'Podría ser un corte de luz',
         evidencia: `La SEC informa ${fmt(enRegion.clientes)} clientes sin luz en ${enRegion.comunas} comuna(s) de la región ${f.region}.`,
+      }
+    }
+    const sismo = f.region ? sismoCerca(idx.sismos, f.region) : null
+    if (sismo) {
+      const hace = Math.max(1, Math.round((Date.now() - sismo.hora) / 60000))
+      return {
+        tipo: 'sismo',
+        texto: 'Podría ser el sismo',
+        evidencia: `Sismo de magnitud ${sismo.mag.toFixed(1).replace('.', ',')} hace ${hace < 120 ? `${hace} min` : `${Math.round(hace / 60)} h`} (${sismo.lugar}, según USGS).`,
+      }
+    }
+    const clima = f.region ? climaFuerte(idx.clima, f.region) : null
+    if (clima) {
+      const partes = [clima.lluvia >= LLUVIA_FUERTE_MM ? `lluvia de ${String(clima.lluvia).replace('.', ',')} mm en los últimos 15 min` : null, clima.rafagas >= RAFAGA_FUERTE_KMH ? `ráfagas de ${Math.round(clima.rafagas)} km/h` : null].filter(Boolean)
+      return {
+        tipo: 'clima',
+        texto: 'Podría ser el temporal',
+        evidencia: `En la región ${f.region} hay ${partes.join(' y ')} (Open-Meteo).`,
       }
     }
   }
@@ -99,7 +119,7 @@ export function alcance(filas, empresa, pais = 'CL') {
 }
 
 // Causa más probable para un punto del mapa (varias filas): la de mayor prioridad entre sus fallas.
-const PRIORIDAD = { luz: 4, red: 3, luz_region: 2, personas: 1 }
+const PRIORIDAD = { luz: 6, sismo: 5, red: 4, luz_region: 3, clima: 2, personas: 1 }
 export function causaDePunto(detalle, filas, idx, tri) {
   let mejor = null
   for (const f of detalle) {
@@ -121,8 +141,13 @@ export function causaDeEmpresa(empresa, pais, filas, idx, tri) {
     const base = conLuz.find((c) => c.tipo === 'luz') ?? conLuz[0]
     return { ...base, evidencia: `${conLuz.length} de ${causas.length} lugares con falla tienen cortes de luz informados por la SEC.` }
   }
-  // La luz no explica la mayoría: se evalúa la red y los reportes, sin considerar la luz.
+  // Lo mismo con sismos y temporales: solo si explican la mayoría de los lugares con falla.
+  for (const tipo of ['sismo', 'clima']) {
+    const del = causas.filter((c) => c.tipo === tipo)
+    if (causas.length > 0 && del.length * 2 > causas.length) return { ...del[0], evidencia: `${del[0].evidencia} Afecta a ${del.length} de ${causas.length} lugares con falla.` }
+  }
+  // Ni la luz ni el entorno explican la mayoría: se evalúa la red y los reportes.
   return causaDePunto(propias, filas, indiceLuz([]), tri)
 }
 
-export const ICONO_CAUSA = { luz: '⚡', luz_region: '⚡', red: '📡', personas: '👥' }
+export const ICONO_CAUSA = { luz: '⚡', luz_region: '⚡', sismo: '🌎', clima: '🌧️', red: '📡', personas: '👥' }

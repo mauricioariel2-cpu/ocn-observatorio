@@ -148,7 +148,7 @@ export default function Privacidad() {
         </p>
         <p>
           <b>Otras fuentes:</b> el mapa también muestra datos públicos de sitios de reportes y de mediciones de red
-          (Geoblackout, FallaCL, IODA, Blackout Map, RIPE Atlas, Cloudflare Radar, SEC). De Geoblackout guardamos extractos de comentarios
+          (Geoblackout, FallaCL, IODA, Blackout Map, RIPE Atlas, Cloudflare Radar, SEC, clima de Open-Meteo y sismos de USGS). De Geoblackout guardamos extractos de comentarios
           públicos con su ciudad, sin nombres de usuario, solo para ubicar fallas.
         </p>
       </section>

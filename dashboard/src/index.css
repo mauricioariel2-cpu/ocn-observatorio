@@ -607,10 +607,14 @@ button.kpi-chip { font: inherit; font-size: 13px; cursor: pointer; }
 .causa-alcance { font-weight: 400; color: #4a5263; }
 .causa-luz, .causa-luz_region { border-left-color: #3fb8f5; }
 .causa-red { border-left-color: #ff6b6e; }
+.causa-sismo { border-left-color: #c58cff; }
+.causa-clima { border-left-color: #7fe0c4; }
 .causa-personas { border-left-color: var(--naranjo); }
 .lista li small.causa-corta { display: block; margin-top: 2px; }
 .lista li small.causa-corta.causa-luz, .lista li small.causa-corta.causa-luz_region { color: #7fd0f8; }
 .lista li small.causa-corta.causa-red { color: #ff8a8d; }
+.lista li small.causa-corta.causa-sismo { color: #d4abff; }
+.lista li small.causa-corta.causa-clima { color: #8fe8cf; }
 .trampa { position: absolute !important; left: -9999px !important; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 
 /* Ficha de caída (lib/ficha.js) */

@@ -1,7 +1,7 @@
 # Capas de seguridad HTTP para Cloudflare Pages (se aplican a toda la web).
 /*
   # Solo se ejecuta código propio; solo se conecta a Supabase (datos del OCN), RIPEstat (detectar compañía) y Esri (mapa base).
-  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://server.arcgisonline.com; font-src 'self' data:; connect-src 'self' https://xomhtisorvfcrkpbvzpb.supabase.co wss://xomhtisorvfcrkpbvzpb.supabase.co https://stat.ripe.net; manifest-src 'self'; worker-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; upgrade-insecure-requests
+  Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://server.arcgisonline.com; font-src 'self' data:; connect-src 'self' https://xomhtisorvfcrkpbvzpb.supabase.co wss://xomhtisorvfcrkpbvzpb.supabase.co https://stat.ripe.net https://api.open-meteo.com https://earthquake.usgs.gov; manifest-src 'self'; worker-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'; upgrade-insecure-requests
   # Nadie puede meter el OCN dentro de otra página (evita copias "enmarcadas" y engaños de clic).
   X-Frame-Options: DENY
   X-Content-Type-Options: nosniff

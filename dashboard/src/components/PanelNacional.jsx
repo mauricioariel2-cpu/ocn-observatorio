@@ -37,7 +37,7 @@ export default function PanelNacional({ comunas, paises, nacional, tri, todas = 
             </li>
           ))}
         </ul>
-        <p className="pie">Causa probable: ⚡ corte de luz informado por la SEC en el mismo lugar · 📡 sondas dentro de la red de la compañía miden la caída · 👥 solo reportes de personas. Es una estimación con datos reales, no una afirmación.</p>
+        <p className="pie">Causa probable: ⚡ corte de luz informado por la SEC en el mismo lugar · 🌎 sismo fuerte cercano (USGS) · 🌧️ lluvia o viento fuerte en la región (Open-Meteo) · 📡 sondas dentro de la red de la compañía miden la caída · 👥 solo reportes de personas. Es una estimación con datos reales, no una afirmación.</p>
         <p className="pie">Una falla se marca como confirmada solo si al menos 2 fuentes independientes la reportan en la última hora: reportes ciudadanos (Geoblackout, FallaCL, vecinos en OCN) y mediciones de red (IODA, sondas de Blackout Map y de RIPE Atlas).</p>
 
         <h2>Semáforo por región</h2>

@@ -1,3 +1,4 @@
+import { cargarClima, cargarSismos } from './lib/entorno'
 import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
 import MapaCaidas from './components/MapaCaidas'
 import PanelNacional from './components/PanelNacional'
@@ -34,6 +35,7 @@ export default function App() {
   const [versionPerfil, setVersionPerfil] = useState(0)
   const [chatAbierto, setChatAbierto] = useState(false)
   const [luz, setLuz] = useState({ hora: null, comunas: [], total: 0 })
+  const [entorno, setEntorno] = useState({ clima: null, sismos: [] })
   const [errorLuz, setErrorLuz] = useState(null)
   const [capaLuz, setCapaLuz] = useState(false)
   // Ficha de caída: vive en la dirección (#caida/vtr) para poder compartirla.
@@ -50,6 +52,15 @@ export default function App() {
   async function recargarLuz() {
     try { setLuz(await cargarCortesLuz()); setErrorLuz(null) } catch (e) { setErrorLuz(e.message ?? String(e)) }
   }
+
+  // Clima y sismos (para la causa probable): cada 15 min; si falla, la causa se calcula sin ellos.
+  useEffect(() => {
+    const cargar = () => Promise.allSettled([cargarClima(), cargarSismos()]).then(([c, s]) =>
+      setEntorno((e) => ({ clima: c.status === 'fulfilled' ? c.value : e.clima, sismos: s.status === 'fulfilled' ? s.value : e.sismos })))
+    cargar()
+    const id = setInterval(cargar, 15 * 60_000)
+    return () => clearInterval(id)
+  }, [])
 
   async function recargarVecinos() {
     try { const v = await cargarVecinos(); setVecinos(v); return v } catch { return [] /* si la tabla aún no existe, el mapa sigue funcionando */ }
@@ -101,7 +112,7 @@ export default function App() {
   const paises = useMemo(() => puntosPais(todas), [todas])
   const nacional = useMemo(() => estadoNacional(todas, 'CL'), [todas])
   const tri = useMemo(() => triangular(todas), [todas])
-  const idxLuz = useMemo(() => indiceLuz(luz.comunas), [luz])
+  const idxLuz = useMemo(() => indiceLuz(luz.comunas, entorno), [luz, entorno])
 
   const semaforo = useMemo(() => semaforoRegiones(comunas, REGIONES_CL, tri), [comunas, tri])
   const enRojo = semaforo.filter((r) => r.gravedad === 'falla_masiva').length
