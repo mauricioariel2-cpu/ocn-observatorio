@@ -5,6 +5,7 @@ import 'leaflet/dist/leaflet.css'
 import { FUENTES_TOTALES, puntosRegion, verifDe } from '../lib/datos'
 import { REGIONES_CL, VISTAS, nivelPorZoom, paisDeVista } from '../lib/geo'
 import { ICONO_CAUSA, causaDePunto, indiceLuz } from '../lib/causa'
+import { FUENTE_CONEXIONES, escalaDePunto } from '../lib/conexiones'
 import { COLOR_ESTADO, TEXTO_ESTADO, cargarContornos, cargarEstadoPaises, nombrePais } from '../lib/mundo'
 
 const SERVICIO = { internet_fijo: 'Internet hogar', internet_movil: 'Internet móvil', tv: 'TV', internet: 'Internet', telefonia_fija: 'Telefonía', streaming: 'Streaming', banca: 'Banca' }
@@ -99,6 +100,18 @@ function SeguirZoom({ alCambiar }) {
   return null
 }
 
+// Escala: cuántos hogares tienen internet fijo en ese lugar (SUBTEL), para leer los reportes en proporción.
+function Escala({ e }) {
+  if (!e) return null
+  const tasa = e.tasa == null ? null : e.tasa < 0.1 ? 'menos de 0,1' : e.tasa.toLocaleString('es-CL')
+  return (
+    <div className="popup-escala" title={FUENTE_CONEXIONES}>
+      🏠 {e.lugar}: {e.n.toLocaleString('es-CL')} conexiones de internet fijo{tasa ? ` · ${tasa} reportes por cada 10.000` : ''}
+      <small>Fuente: {FUENTE_CONEXIONES}</small>
+    </div>
+  )
+}
+
 export default function MapaCaidas({ comunas, paises, vista, nuevos, tri, todas = [], idxLuz = indiceLuz([]), abrirFicha, meAfecta, luz = [], capaLuz = false, alternarLuz }) {
   const [zoom, setZoom] = useState(4)
   const nivel = nivelPorZoom(zoom)
@@ -191,6 +204,7 @@ export default function MapaCaidas({ comunas, paises, vista, nuevos, tri, todas 
               <strong>{p.titulo}</strong>
               {p.subtitulo && <span className="popup-sub">{p.subtitulo}</span>}
               <div className="popup-total">{p.total ? `${p.total} reportes` : 'Caída medida en la red'}</div>
+              <Escala e={p.total ? escalaDePunto(p, nivel) : null} />
               <Causa c={causaDePunto(p.detalle, todas, idxLuz, tri)} />
               <ul>
                 {p.detalle.map((e) => {

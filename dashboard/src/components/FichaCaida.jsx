@@ -3,6 +3,7 @@ import { verifDe } from '../lib/datos'
 import { alcance, causaDeEmpresa, ICONO_CAUSA } from '../lib/causa'
 import { armarFicha, cargarHistorial, duracionTexto, HORAS_FICHA, textoEvidenciaFicha, urlFicha } from '../lib/ficha'
 import { PORTAL_SUBTEL } from '../lib/reclamos'
+import { FUENTE_CONEXIONES, URL_CONEXIONES, escalaDeZona } from '../lib/conexiones'
 
 const hora = (t) => new Date(t).toLocaleString('es-CL', { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: 'America/Santiago' })
 const horaCorta = (t) => new Date(t).toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: 'America/Santiago' })
@@ -31,6 +32,7 @@ export default function FichaCaida({ slug, cerrar, todas, tri, idxLuz, reportar 
   const verif = ficha?.hayFalla ? verifDe(tri, { pais: 'CL', empresa: ficha.nombre }) : null
   const causa = ficha?.hayFalla ? causaDeEmpresa(ficha.nombre, 'CL', ficha.filas, idxLuz, tri) : null
   const alc = ficha?.hayFalla ? alcance(ficha.filas, ficha.nombre) : null
+  const zona = ficha?.hayFalla ? escalaDeZona(ficha.comunas, ficha.regiones, ficha.nacional) : null
   const evidencia = ficha?.hayFalla ? textoEvidenciaFicha(ficha, verif, causa) : ''
   const maxN = ficha?.linea ? Math.max(1, ...ficha.linea.map((x) => x.n)) : 1
 
@@ -91,6 +93,7 @@ export default function FichaCaida({ slug, cerrar, todas, tri, idxLuz, reportar 
               </figure>
             )}
 
+            {zona && <p className="ficha-lugares">🏠 <b>{zona.n.toLocaleString('es-CL')} conexiones de internet fijo</b> {zona.texto} (<a href={URL_CONEXIONES} target="_blank" rel="noreferrer">{FUENTE_CONEXIONES}</a>). No todas están afectadas: es el tamaño de la zona.</p>}
             {ficha.comunas.length > 0 && <p className="ficha-lugares"><b>Comunas:</b> {ficha.comunas.slice(0, 20).join(', ')}{ficha.comunas.length > 20 ? ` y ${ficha.comunas.length - 20} más` : ''}</p>}
 
             <h3>Fuentes</h3>

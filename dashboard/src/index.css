@@ -67,6 +67,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .popup strong { font-size: 16px; display: block; }
 .popup-sub { color: var(--tenue); font-size: 12px; }
 .popup-total { margin: 6px 0; font-weight: 700; color: #ff8a8d; }
+.popup-escala { margin: 4px 0 6px; font-size: 12px; color: var(--texto); }
+.popup-escala small { display: block; color: var(--tenue); font-size: 11px; }
 .popup ul { margin: 0 0 8px; padding-left: 16px; font-size: 13px; max-height: 160px; overflow-y: auto; }
 .popup-tip { display: block; font-size: 12px; color: var(--tenue); margin-bottom: 8px; }
 .btn-afecta { width: 100%; background: var(--rojo); color: #fff; border: 0; padding: 9px 12px; border-radius: 8px; font-weight: 700; opacity: .55; cursor: not-allowed; }
