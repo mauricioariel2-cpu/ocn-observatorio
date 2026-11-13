@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { enviarReporte } from '../lib/datos'
+import { balanceVecinos, enviarFunciona, enviarReporte } from '../lib/datos'
 import { REGIONES_CL } from '../lib/geo'
 import { detectarCompania } from '../lib/isp'
 import { dispositivo, guardarPerfil, leerPerfil } from '../lib/perfil'
@@ -38,7 +38,7 @@ export default function ChatOCN({ contar, abierto, setAbierto, verMapa, verPriva
   useEffect(() => { fin.current?.scrollIntoView({ behavior: 'smooth', block: 'end' }) }, [msgs, escribiendo, opciones])
 
   async function bot(...textos) {
-    for (const t of textos) {
+    for (const t of textos.filter(Boolean)) {
       setEscribiendo(true)
       await espera(Math.min(450 + String(t).length * 12, 1300))
       setEscribiendo(false)
@@ -82,13 +82,43 @@ export default function ChatOCN({ contar, abierto, setAbierto, verMapa, verPriva
     ] })
   }
 
+  // "Me funciona bien": también se registra. Es la línea base que permite notar una caída antes y con más certeza.
   async function funciona() {
-    await bot('¡Qué bueno! 🙌 Si se cae, vuelve aquí: reportar toma 10 segundos.', 'Mientras tanto puedes ver en el mapa cómo está tu región.')
-    preguntar({ tipo: 'botones', items: [['Reportar un problema', preguntaEstado]] })
+    datos.current.tipo = 'funciona'
+    const d = datos.current
+    if (d.empresa && d.servicio && d.region) {
+      await bot(`¡Qué bueno! 🙌 ¿Te refieres a tu ${SERVICIOS[d.servicio].toLowerCase()} **${d.empresa}** en ${d.comuna ? `${d.comuna}, ` : ''}${d.region}?`)
+      preguntar({ tipo: 'botones', items: [['Sí, ese', enviarOk], ['Es otro servicio o lugar', preguntaServicio]] })
+    } else preguntaServicio()
+  }
+
+  async function enviarOk() {
+    aceptar()
+    const d = datos.current
+    setEscribiendo(true)
+    try {
+      await enviarFunciona({
+        empresa: d.empresa, servicio: d.servicio, region: d.region, comuna: d.comuna || null,
+        empresa_detectada: !!d.detectada, dispositivo: dispositivo(),
+      })
+      guardarPerfil({ empresa: d.empresa, servicio: d.servicio, region: d.region, comuna: d.comuna || null })
+      const b = await balanceVecinos(d.empresa, d.region).catch(() => null)
+      setEscribiendo(false)
+      await bot(
+        `✅ Anotado: ${d.empresa} te funciona bien en ${d.comuna ? `${d.comuna}, ` : ''}${d.region}.`,
+        b ? `En las últimas 3 horas, en ${d.region}: **${b.funciona}** vecino${b.funciona === 1 ? '' : 's'} dice${b.funciona === 1 ? '' : 'n'} que ${d.empresa} funciona y **${b.falla}** reporta${b.falla === 1 ? '' : 'n'} falla.` : null,
+        'Tu señal sirve: así el OCN distingue una caída real de un problema aislado. Si se cae, vuelve aquí y reportar toma 10 segundos.',
+      )
+      preguntar({ tipo: 'botones', items: [['Ver el mapa', () => { setAbierto(false); verMapa?.() }], ['Reportar un problema', preguntaEstado]] })
+    } catch (e) {
+      setEscribiendo(false)
+      await bot(e.message)
+      preguntar({ tipo: 'botones', items: [['Ver el mapa', () => { setAbierto(false); verMapa?.() }], ['Reportar un problema', preguntaEstado]] })
+    }
   }
 
   async function preguntaServicio() {
-    await bot('Lo siento 😕 Te ayudo a reportarlo. ¿Qué servicio es?')
+    await bot(datos.current.tipo === 'funciona' ? '¿Qué servicio te funciona bien?' : 'Lo siento 😕 Te ayudo a reportarlo. ¿Qué servicio es?')
     const sugerido = red.current?.tipoConexion === 'movil' ? 'internet_movil' : null
     preguntar({ tipo: 'botones', items: Object.entries(SERVICIOS).map(([v, t]) => [t, () => { datos.current.servicio = v; preguntaEmpresa() }]), destacado: sugerido && SERVICIOS[sugerido] })
   }
@@ -147,6 +177,7 @@ export default function ChatOCN({ contar, abierto, setAbierto, verMapa, verPriva
   }
 
   async function preguntaDesde() {
+    if (datos.current.tipo === 'funciona') { enviarOk(); return }
     await bot('¿Desde cuándo tienes el problema?')
     preguntar({ tipo: 'botones', items: Object.entries(DESDE).map(([v, t]) => [t, () => { datos.current.desde = v; enviar() }]) })
   }

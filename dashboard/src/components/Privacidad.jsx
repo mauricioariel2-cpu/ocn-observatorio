@@ -90,12 +90,12 @@ export default function Privacidad() {
         {estado.tipo === 'cargando' && <p>Un momento…</p>}
         {estado.tipo === 'error' && <p className="pv-error">No se pudo completar: {estado.msg}. Si sigue fallando, usa el formulario de abajo.</p>}
         {estado.tipo === 'borrado' && (
-          <p className="pv-ok">Listo. Borramos {estado.r ? `${estado.r.reportes} reporte(s), ${estado.r.reclamos} reclamo(s) y ${estado.r.resultados} resultado(s) del servidor, y ` : ''}todo lo guardado en este celular.</p>
+          <p className="pv-ok">Listo. Borramos {estado.r ? `${estado.r.reportes} reporte(s), ${estado.r.me_funciona ?? 0} señal(es) «me funciona», ${estado.r.reclamos} reclamo(s) y ${estado.r.resultados} resultado(s) del servidor, y ` : ''}todo lo guardado en este celular.</p>
         )}
         {estado.tipo === 'ok' && (
           <>
             <p className="pv-ok">
-              En el servidor: {n ? `${n.reportes.length} reporte(s), ${n.reclamos.length} reclamo(s) y ${n.resultados_reclamos.length} resultado(s).` : 'nada asociado a este celular.'}
+              En el servidor: {n ? `${n.reportes.length} reporte(s), ${(n.me_funciona ?? []).length} señal(es) «me funciona», ${n.reclamos.length} reclamo(s) y ${n.resultados_reclamos.length} resultado(s).` : 'nada asociado a este celular.'}
               {' '}En este celular: {Object.keys(estado.datos.en_este_celular).length} dato(s) guardado(s).
             </p>
             <pre className="pv-json">{JSON.stringify(estado.datos, null, 2)}</pre>
@@ -118,12 +118,14 @@ export default function Privacidad() {
           <div role="row" className="pv-fila pv-cab"><span role="columnheader">Dato</span><span role="columnheader">Para qué</span><span role="columnheader">Base legal</span><span role="columnheader">Cuánto tiempo</span></div>
           <Fila d="Reporte de falla: compañía, servicio, tipo de problema, desde cuándo, región y comuna (opcional), hora"
             p="Mostrar la falla en el mapa, contar personas afectadas y estadísticas" b="Tu consentimiento (art. 12)" t="Visible al público 24 h; luego queda como estadística anónima" />
+          <Fila d="Señal «Me funciona bien»: compañía, servicio, región y comuna (opcional), hora"
+            p="Saber cuánta gente está conectada sin problemas, para detectar caídas con más certeza (línea base)" b="Tu consentimiento (art. 12)" t="Visible al público 24 h; luego queda como estadística anónima" />
           <Fila d="Ubicación aproximada (redondeada a ~1 km), solo si tocas “usar mi ubicación” y tu navegador lo permite"
             p="Sugerir tu región y ubicar mejor la falla. No es pública" b="Tu consentimiento" t={`Se borra a los ${RETENCION_DIAS} días`} />
           <Fila d="Código aleatorio del celular (no es tu número ni tu identidad)"
             p="Evitar reportes repetidos y permitirte ver o borrar tus datos" b="Tu consentimiento" t={`Se desvincula a los ${RETENCION_DIAS} días`} />
           <Fila d="Huella cifrada de tu dirección IP (SHA-256 con clave secreta; la IP no se guarda)"
-            p="Frenar el spam: un reporte cada 30 minutos" b="Interés legítimo en la integridad de los datos (art. 13 d)" t="Máximo 3 días" />
+            p="Frenar el spam: un reporte cada 30 minutos y una señal «me funciona» por hora" b="Interés legítimo en la integridad de los datos (art. 13 d)" t="Máximo 3 días" />
           <Fila d="Reclamo armado en OCN: solo se cuenta (compañía, servicio, región, tipo, desde cuándo)"
             p="Contador público de reclamos" b="Tu consentimiento" t={`Código desvinculado a los ${RETENCION_DIAS} días`} />
           <Fila d="Resultado de tu reclamo: compañía, resultado y días hábiles"

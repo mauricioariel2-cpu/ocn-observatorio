@@ -174,6 +174,21 @@ export async function enviarReporte(reporte) {
   if (error) throw new Error(error.message)
 }
 
+// ---------- Señales "Me funciona bien" (línea base propia, tabla senales_ok) ----------
+export async function enviarFunciona(senal) {
+  const { error } = await supabase.from('senales_ok').insert(senal)
+  if (error) throw new Error(error.message)
+}
+
+// Cuántos vecinos dijeron "me funciona" y cuántos reportaron falla para una compañía y región (últimas horas).
+export async function balanceVecinos(empresa, region, horas = 3) {
+  const desde = desdeISO(horas)
+  const contar = (tabla) => supabase.from(tabla).select('id', { count: 'exact', head: true })
+    .eq('empresa', empresa).eq('region', region).gte('creado_en', desde)
+  const [ok, mal] = await Promise.all([contar('senales_ok'), contar('reportes_usuarios')])
+  return { funciona: ok.count ?? 0, falla: mal.count ?? 0 }
+}
+
 // Agrupa los reportes de vecinos por empresa, servicio y región, como filas
 // con el mismo formato que reportes_caidas (fuente "ocn"). Se cuentan, no se estiman.
 export function resumirVecinos(vecinos, centros) {

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { enviarReporte } from '../lib/datos'
+import { enviarFunciona, enviarReporte } from '../lib/datos'
 import { dispositivo, guardarPerfil, leerPerfil } from '../lib/perfil'
 import { aceptar } from '../lib/privacidad'
 import NoEresElUnico from './NoEresElUnico'
@@ -74,12 +74,34 @@ export default function ReportarFalla({ abierto, cerrar, regionInicial, alEnviar
     }
   }
 
+  // "Me funciona bien": línea base propia. No se pinta como falla; sirve para comparar.
+  async function funciona() {
+    if (!empresa || !region) return setEstado({ tipo: 'error', msg: 'Elige tu compañía y tu región.' })
+    if (trampa || Date.now() - abiertoEn < 1500) return setEstado({ tipo: 'error', msg: 'Espera un segundo y vuelve a intentarlo.' })
+    aceptar()
+    setEstado({ tipo: 'enviando' })
+    try {
+      const perfil = { empresa, servicio, region, comuna: comuna.trim() || null }
+      await enviarFunciona({ ...perfil, dispositivo: dispositivo() })
+      guardarPerfil(perfil)
+      setEstado({ tipo: 'ok-funciona' })
+    } catch (err) {
+      setEstado({ tipo: 'error', msg: err.message })
+    }
+  }
+
   return (
     <div className="modal-fondo" role="dialog" aria-modal="true" aria-labelledby="titulo-reporte" onClick={cerrar}>
       <form className="modal" onClick={(e) => e.stopPropagation()} onSubmit={enviar}>
         <h2 id="titulo-reporte">¿Se te cayó el servicio?</h2>
         <input className="trampa" type="text" name="sitio_web" tabIndex={-1} autoComplete="off" aria-hidden="true" value={trampa} onChange={(e) => setTrampa(e.target.value)} />
-        {estado.tipo === 'ok' ? (
+        {estado.tipo === 'ok-funciona' ? (
+          <>
+            <p className="ok-msg">✓ Gracias. Anotamos que tu {empresa} funciona bien.</p>
+            <p className="nota">Tu señal ayuda a distinguir una caída real de un problema aislado.</p>
+            <button type="button" className="btn-primario" onClick={cerrar}>Volver al mapa</button>
+          </>
+        ) : estado.tipo === 'ok' ? (
           <>
             <p className="ok-msg">✓ Gracias. Tu reporte ya aparece en el mapa.</p>
             <NoEresElUnico empresa={empresa} region={region} enOcn={estado.enOcn} otras={estado.otras} />
@@ -115,6 +137,9 @@ export default function ReportarFalla({ abierto, cerrar, regionInicial, alEnviar
             {estado.tipo === 'error' && <p className="error">{estado.msg}</p>}
             <button type="submit" className="btn-primario" disabled={estado.tipo === 'enviando'}>
               {estado.tipo === 'enviando' ? 'Enviando…' : 'Enviar reporte'}
+            </button>
+            <button type="button" className="btn-secundario" onClick={funciona} disabled={estado.tipo === 'enviando'}>
+              🟢 A mí me funciona bien
             </button>
             <p className="nota">Sin nombre ni RUT. Al enviar aceptas la <button type="button" className="btn-link" onClick={() => { cerrar(); verPrivacidad?.() }}>política de privacidad</button>.</p>
             <button type="button" className="cerrar" onClick={cerrar} aria-label="Cerrar">✕</button>
